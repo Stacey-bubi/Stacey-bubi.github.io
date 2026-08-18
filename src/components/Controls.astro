@@ -1,0 +1,189 @@
+---
+import { THEMES, type ThemeKey } from '../data/themes'
+
+interface Props {
+  /** Only the themes that actually have entries, in display order. */
+  themeKeys: ThemeKey[]
+  total: number
+}
+
+const { themeKeys, total } = Astro.props
+---
+
+<div class="controls">
+  <div class="wrap controls__inner">
+    <div class="controls__chips" role="group" aria-label="Filter by theme">
+      <button class="chip chip--all" type="button" data-filter="all" aria-pressed="true">
+        All
+      </button>
+      {
+        themeKeys.map((key) => (
+          <button
+            class="chip"
+            type="button"
+            data-filter={key}
+            aria-pressed="false"
+            style={`--h:${THEMES[key].hue}`}
+          >
+            {THEMES[key].label}
+          </button>
+        ))
+      }
+    </div>
+
+    <div class="controls__right">
+      <label class="sr-only" for="paper-search">Search papers</label>
+      <input
+        class="search"
+        id="paper-search"
+        type="search"
+        placeholder="Search notes…"
+        autocomplete="off"
+      />
+      <button class="btn" type="button" data-sort aria-live="off">Newest first</button>
+      <button class="btn" type="button" data-expand>Expand all</button>
+      <span class="controls__count" data-count aria-live="polite">{total} papers</span>
+    </div>
+  </div>
+</div>
+
+<style>
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+</style>
+
+<script>
+  const cards = Array.from(
+    document.querySelectorAll<HTMLElement>('.card[data-theme-key]')
+  )
+  if (cards.length) {
+    const chips = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.chip[data-filter]')
+    )
+    const search = document.getElementById('paper-search') as HTMLInputElement
+    const sortBtn = document.querySelector<HTMLButtonElement>('[data-sort]')!
+    const expandBtn = document.querySelector<HTMLButtonElement>('[data-expand]')!
+    const count = document.querySelector<HTMLElement>('[data-count]')!
+    const empty = document.querySelector<HTMLElement>('.empty')
+    const sections = Array.from(
+      document.querySelectorAll<HTMLElement>('.section[data-theme-section]')
+    )
+    // The reading list carries theme tags too, so it filters alongside the cards.
+    const queueItems = Array.from(
+      document.querySelectorAll<HTMLElement>('.queue li[data-theme-key]')
+    )
+    const queueSection = document.querySelector<HTMLElement>('[data-queue-section]')
+
+    const active = new Set<string>()
+    let query = ''
+    let newestFirst = true
+
+    // Remember where each card started so sorting stays stable across flips.
+    cards.forEach((card, i) => (card.dataset.index = String(i)))
+
+    function apply() {
+      let shown = 0
+
+      for (const card of cards) {
+        const themeOk = active.size === 0 || active.has(card.dataset.themeKey!)
+        const textOk = query === '' || card.dataset.text!.includes(query)
+        const visible = themeOk && textOk
+        card.hidden = !visible
+        if (visible) shown++
+      }
+
+      let queueShown = 0
+      for (const item of queueItems) {
+        const themeOk = active.size === 0 || active.has(item.dataset.themeKey!)
+        const textOk = query === '' || item.dataset.text!.includes(query)
+        const visible = themeOk && textOk
+        item.hidden = !visible
+        if (visible) queueShown++
+      }
+      if (queueSection) queueSection.hidden = queueShown === 0
+
+      // A section with nothing left in it should not leave a dangling heading.
+      for (const section of sections) {
+        const any = section.querySelector('.card:not([hidden])')
+        section.hidden = !any
+      }
+
+      count.textContent =
+        shown === cards.length
+          ? `${shown} papers`
+          : `${shown} of ${cards.length} papers`
+
+      empty?.classList.toggle('is-shown', shown === 0 && queueShown === 0)
+    }
+
+    function sort() {
+      for (const list of document.querySelectorAll<HTMLElement>('.cards')) {
+        const items = Array.from(list.children) as HTMLElement[]
+        items.sort((a, b) => {
+          const ya = Number(a.dataset.year)
+          const yb = Number(b.dataset.year)
+          if (ya !== yb) return newestFirst ? yb - ya : ya - yb
+          return Number(a.dataset.index) - Number(b.dataset.index)
+        })
+        items.forEach((item) => list.appendChild(item))
+      }
+    }
+
+    for (const chip of chips) {
+      chip.addEventListener('click', () => {
+        const key = chip.dataset.filter!
+        if (key === 'all') {
+          active.clear()
+        } else if (active.has(key)) {
+          active.delete(key)
+        } else {
+          active.add(key)
+        }
+        for (const c of chips) {
+          const k = c.dataset.filter!
+          c.setAttribute(
+            'aria-pressed',
+            String(k === 'all' ? active.size === 0 : active.has(k))
+          )
+        }
+        apply()
+      })
+    }
+
+    let debounce: number
+    search.addEventListener('input', () => {
+      window.clearTimeout(debounce)
+      debounce = window.setTimeout(() => {
+        query = search.value.trim().toLowerCase()
+        apply()
+      }, 120)
+    })
+
+    sortBtn.addEventListener('click', () => {
+      newestFirst = !newestFirst
+      sortBtn.textContent = newestFirst ? 'Newest first' : 'Oldest first'
+      sort()
+    })
+
+    expandBtn.addEventListener('click', () => {
+      const open = expandBtn.dataset.open !== 'true'
+      for (const d of document.querySelectorAll<HTMLDetailsElement>('.card__more')) {
+        d.open = open
+      }
+      expandBtn.dataset.open = String(open)
+      expandBtn.textContent = open ? 'Collapse all' : 'Expand all'
+    })
+
+    sort()
+    apply()
+  }
+</script>

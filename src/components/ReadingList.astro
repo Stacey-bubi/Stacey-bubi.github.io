@@ -1,0 +1,42 @@
+---
+import { THEMES } from '../data/themes'
+import type { QueueItem } from '../data/reading-list'
+
+interface Props {
+  items: QueueItem[]
+}
+
+const { items } = Astro.props
+---
+
+<section class="section" id="reading-list" data-queue-section>
+  <div class="section__head">
+    <h2>On my reading list</h2>
+    <p>
+      Papers I am tracking but have not written up yet. No summaries here on
+      purpose — I would rather leave a title than invent an opinion.
+    </p>
+  </div>
+
+  <ul class="queue">
+    {
+      items.map((item) => (
+        <li
+          style={`--h:${THEMES[item.theme].hue}`}
+          data-theme-key={item.theme}
+          data-text={`${item.title} ${THEMES[item.theme].label} ${item.note ?? ''}`.toLowerCase()}
+        >
+          {item.url ? (
+            <a href={item.url} rel="noopener">
+              {item.title}
+            </a>
+          ) : (
+            <span class="queue__title">{item.title}</span>
+          )}
+          <span class="tag">{THEMES[item.theme].label}</span>
+          {item.note && <em>{item.note}</em>}
+        </li>
+      ))
+    }
+  </ul>
+</section>

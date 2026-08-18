@@ -1,0 +1,122 @@
+---
+title: Refusal in Language Models Is Mediated by a Single Direction
+authors: Arditi, Obeso, Syed, Paleka, Panickssery, Gurnee, Nanda
+year: 2024
+venue: NeurIPS 2024
+theme: geometry
+url: https://arxiv.org/abs/2406.11717
+code: https://github.com/andyrdt/refusal_direction
+why: "This is where abliteration comes from. Almost everything else on this list either builds on it or argues with it, so it is the one paper here you have to read first."
+question: "Chat models are trained to refuse harmful requests. Nobody had shown where in the model that behaviour lives. Is there one concrete internal thing you can point at, and if there is, how hard is it to remove?"
+contributions:
+  - "Shows that in 13 chat models, from 1.8B to 72B across five families, refusal is mediated by a single direction in the residual stream — the running vector that every layer reads from and writes back to."
+  - "Extracts that direction with difference-in-means. At layer $\\ell$ and token position $i$, average the residual stream over harmful prompts and over harmless prompts, then subtract: $r = \\mu_{\\text{harmful}} - \\nu_{\\text{harmless}}$."
+  - "Selects one direction out of all (layer, position) candidates using three scores: <code>bypass_score</code> (does ablating it stop refusal), <code>induce_score</code> (does adding it cause refusal), and <code>kl_score</code> (does ablating it disturb harmless prompts). Candidates need $\\text{induce\\_score} > 0$, $\\text{kl\\_score} < 0.1$, and layer $\\ell < 0.8L$ so the direction is not just reading off the output vocabulary."
+  - "Ablates it at inference by projecting it out of every layer and position: $x' = x - \\hat{r}\\hat{r}^\\top x$. Adding $r$ instead makes the model refuse harmless requests, which is what makes the claim causal rather than correlational."
+  - "Folds the same projection into the weights. Every matrix that writes into the residual stream — embeddings, attention output, MLP output — is orthogonalised against the direction: $W' = W - \\hat{r}\\hat{r}^\\top W$. The paper proves this is exactly equivalent to ablating at inference. The result is an ordinary checkpoint with refusal removed and no gradient step ever taken. This is abliteration."
+  - "Explains adversarial suffixes mechanistically. A GCG suffix drives activations away from $\\hat{r}$ down to harmless levels, by capturing the attention of the specific heads that normally write the refusal signal, so those heads read the suffix instead of the harmful words."
+evaluation: "13 models: Qwen Chat (1.8B/7B/14B/72B), Yi Chat (6B/34B), Gemma IT (2B/7B), Llama-2 Chat (7B/13B/70B), Llama-3 Instruct (8B/70B). Direction fitted on 128 train and 32 validation harmful instructions drawn from AdvBench, MaliciousInstruct, TDC2023 and HarmBench, against 128 and 32 harmless ones from Alpaca. Refusal measured on JailbreakBench (100 harmful instructions) and 100 Alpaca instructions. Jailbreak strength measured on the HarmBench test set (159 standard behaviours), against GCG, GCG-M, GCG-T, AutoPrompt, PAIR, human-written templates, and plain direct requests. Metrics: refusal score by substring match, safety score by Llama Guard 2, and ASR by the HarmBench classifier. Capabilities checked on MMLU, ARC, GSM8K, TruthfulQA."
+results:
+  - "Weight orthogonalisation reaches 79.2% ASR on Qwen 7B, 84.3% on Qwen 14B and 78.0% on Qwen 72B. Human-written jailbreak templates get 0–42.2% on the same models."
+  - "Llama-2 7B is the hard case: 22.6% ASR with its system prompt in place, but 79.9% without it. The system prompt is doing a lot of the work."
+  - "The attack needs harmful <em>instructions</em> only. It never needs harmful <em>answers</em>, and it never runs a gradient step, which is what makes it far cheaper than a fine-tuning attack."
+notes:
+  - "The method works because of <em>where</em> it looks. The tokens after the instruction — the chat template header the reply starts from — are aggregation points. Attention has already pulled the whole prompt into them, so one position holds a summary of the request, including whether it looked harmful. That is why averaging over those positions finds anything at all."
+  - "The direction is per-model. Each model has its own activation space and its own width, so a direction from Llama does nothing in Gemma. There is no portable refusal vector."
+  - "Selecting the direction is a sweep over candidates, not an optimisation. They generate every (layer, position) option, filter out ones that damage the model or sit too near the output, and keep whichever survivor bypasses refusal best. Nothing is optimised toward being a good direction."
+  - "The suffix result reframes GCG. A suffix attack and a weight edit are two routes to the same internal state: one suppresses the direction from the input side, the other removes the model's ability to write it at all."
+limitations:
+  - "It proves a usable direction exists. It does not claim to have found the best one, and difference-in-means is close to the simplest method that could have worked. Concept Cones later beats it by optimising instead."
+  - "The whole result rests on the linear representation hypothesis — the assumption that a concept like refusal is a direction in the first place. That assumption carries the paper and is not tested in it."
+  - "What the direction encodes is unclear, and the authors say so. It may be refusal, or harmfulness, or something with no clean name that correlates with both."
+  - "The edit is less surgical than it looks. Concept Cones measured the cost: ablating this direction drops Qwen2.5-14B from 70.8 to 63.3 on TruthfulQA. Something other than refusal sits on that axis."
+  - "All open models, up to 72B. Nothing here establishes anything about frontier or proprietary systems."
+pathOrder: 3
+pathNote: "The result that started the field: refusal is one direction, and you can cut it out of the weights."
+---
+
+## Finding the direction
+
+Run harmful and harmless instructions through the model. At layer $\ell$ and token
+position $i$, average the residual stream activations over each set and subtract:
+
+$$
+r = \mu_{\text{harmful}} - \nu_{\text{harmless}}
+$$
+
+Normalise to unit length and you have a candidate $\hat{r}$. That is the entire
+extraction method — difference-in-means, no training.
+
+Doing this for every layer and every post-instruction position gives a large pool of
+candidates, and the three selection scores pick one out of it. The layer cutoff
+$\ell < 0.8L$ matters more than it looks: without it the search would happily return a
+direction that just points at refusal *tokens* in the output vocabulary, rather than the
+upstream representation that decides to emit them.
+
+## Three things you can do with it
+
+**Ablate it.** At every layer and position, subtract the component along the direction:
+
+$$
+x' = x - \hat{r}\hat{r}^\top x
+$$
+
+The model now answers harmful requests, and stays coherent while doing it.
+
+**Add it.** Add $r$ into activations at one layer and a harmless prompt starts getting
+refused. This is the half that makes the claim causal. The direction does not merely
+correlate with refusal, it drives it in both directions.
+
+**Put it in the weights.** Every matrix $W_{\text{out}}$ that writes into the residual
+stream gets orthogonalised against the direction:
+
+$$
+W'_{\text{out}} = W_{\text{out}} - \hat{r}\hat{r}^\top W_{\text{out}}
+$$
+
+Appendix E proves this is exactly equivalent to ablating at inference time. Geometrically
+you take the whole activation space and flatten it along one axis, so the model becomes
+physically unable to write into the refusal subspace. What you get out is a normal set of
+weights you can save, upload and share.
+
+The cost profile is the point. Fine-tuning a model to remove safety needs harmful
+instructions *and* harmful answers, plus an optimiser. This needs 128 harmful
+instructions, one forward pass over each, and a matrix subtraction.
+
+## What adversarial suffixes were doing all along
+
+Section 5 measures how strongly activations point along $\hat{r}$ under three conditions:
+a plain harmful prompt, a harmful prompt with a random suffix, and a harmful prompt with
+an adversarial suffix. Under the adversarial suffix the alignment collapses to the level
+of an ordinary harmless prompt.
+
+Then they find the mechanism. Direct feature attribution identifies the attention heads
+that write most strongly toward refusal. Normally those heads attend to the harmful words
+in the instruction. The adversarial suffix pulls their attention onto itself. The heads
+stop seeing the dangerous content, never send the signal, and generation proceeds as if
+the request were ordinary.
+
+So GCG is not finding some exotic new failure. It is suppressing this direction from
+outside the model.
+
+## Where I think it is weak
+
+The extraction method is the obvious gap, and the paper is honest that its goal was to
+demonstrate fragility rather than to find the best direction.
+[Concept Cones](https://arxiv.org/abs/2502.17420) replaces the sweep with gradient descent
+and finds not just a better direction but a whole cone of them.
+
+The deeper problem is the projection. Orthogonal projection assumes the space is round —
+that cutting along one axis leaves everything else alone. Representation space in a
+transformer is [anisotropic](https://aclanthology.org/D19-1006/): activations occupy a
+narrow cone rather than spreading out, and a few dimensions carry variance far out of
+proportion to the rest. An orthogonal step in a space shaped like that is a large step
+along whatever high-variance axis happens to be nearby. The TruthfulQA drop is what that
+looks like from outside.
+
+This is the thread running through most of the rest of the list.
+[LEACE](https://arxiv.org/abs/2306.03819) whitens the space before projecting for exactly
+this reason. The [causal inner product](https://arxiv.org/abs/2311.03658) is an attempt to
+define the right ruler formally. And
+[Safety Subspaces](https://arxiv.org/abs/2505.14185) argues the target may not be
+separable at all.

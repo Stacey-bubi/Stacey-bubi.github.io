@@ -1,0 +1,79 @@
+---
+title: "How Contextual are Contextualized Word Representations? Comparing the Geometry of BERT, ELMo, and GPT-2 Embeddings"
+authors: Ethayarajh
+year: 2019
+venue: EMNLP 2019
+theme: geometry
+url: https://aclanthology.org/D19-1006/
+why: "The paper that named the problem underneath everything else on this list. If the space is a narrow cone rather than a ball, then cosine similarity and orthogonal projection are the wrong tools, and almost every intervention method uses both."
+question: "How are contextual word vectors actually distributed in space? Everyone was using cosine similarity on them. Does the geometry of these spaces support that?"
+contributions:
+  - "<strong>Names and measures anisotropy in contextual models.</strong> The vectors do not spread evenly through the space. They occupy a narrow cone, so two randomly chosen, completely unrelated words already have high cosine similarity before you compare anything meaningful about them."
+  - "<strong>Shows anisotropy grows with depth.</strong> It is mild in the lower layers and severe in the upper ones. In the last layers of GPT-2 the cosine similarity between two random words approaches 1."
+  - "<strong>Proposes anisotropy-corrected measures of contextuality.</strong> Raw self-similarity is meaningless if the baseline is already 0.95, so each measure is adjusted by subtracting the expected similarity of random word pairs in that same layer."
+  - "<strong>Shows static embeddings cannot stand in for contextual ones.</strong> In every layer of ELMo, BERT and GPT-2, on average under 5% of the variance in a word's contextual representations is explained by a single static vector for that word."
+evaluation: "ELMo (2-layer biLSTM), BERT-base-cased (12 layers, bidirectional) and GPT-2 (12 layers, autoregressive), all frozen with no fine-tuning. Data from the SemEval Semantic Textual Similarity tasks 2012–2016, filtered to words appearing in at least five unique contexts, so the same word can be compared across contexts."
+results:
+  - "In the upper layers of these models, cosine similarity between two random unrelated words sits around 0.9 or higher. The measurement scale is broken before you use it."
+  - "Under 5% of variance in a word's contextual vectors is captured by a static embedding, in every layer of all three models."
+notes:
+  - "This is the reason I distrust orthogonal projection as an intervention. Orthogonal projection assumes a round space where directions are comparable. In a narrow cone with a few dominant axes, subtracting a component along one direction quietly moves you a long way along whatever high-variance axis is nearby."
+  - "There is more than one cause and they stack rather than compete. Gao et al. (2019) traced part of it to training dynamics — cross-entropy on a Zipfian vocabulary with weight tying pushes rare-token embeddings into a narrow region. Timkey and van Schijndel (2021) showed a handful of rogue dimensions with huge variance dominate every dot product. <a href='https://transformer-circuits.pub/2022/toy_model/index.html'>Superposition</a> adds another: features are packed as nearly-orthogonal directions under a dimension budget."
+  - "The historical order is worth knowing. Mu and Viswanath found the static-embedding version in 2018 (all-but-the-top). This paper is where it was established for transformers, and it is what LEACE's whitening step is correcting for."
+  - "It is descriptive, not causal. It tells you the space is distorted; it does not tell you what to do about it. <a href='https://arxiv.org/abs/2311.03658'>The causal inner product</a> is one answer, whitening is another."
+limitations:
+  - "English only, and a small specialised corpus. SemEval STS is not a broad sample of language."
+  - "Purely geometric. Nothing connects the measured anisotropy to performance on any downstream task, so the practical size of the problem is left open."
+  - "It describes anisotropy without explaining it. The mechanistic accounts came later and from other people."
+  - "The models are small and old by current standards. That the finding still replicates in modern decoders is established by other work, not by this paper."
+pathOrder: 1
+pathNote: "Start here. The representation space is a narrow cone, so the standard geometric tools are already suspect."
+---
+
+## What anisotropy means, concretely
+
+An **isotropic** space would have the embedding cloud shaped like a ball: variance roughly
+equal in every direction, no preferred axis. In that world cosine similarity behaves. Two
+unrelated words point in unrelated directions and score near zero, so a score of 0.7 means
+something.
+
+Real transformer representations are not shaped like that. They occupy a narrow
+high-dimensional cone. Every vector shares a large common component, so every pair of
+vectors already looks similar. Ethayarajh's measurement is the memorable part: in the upper
+layers, two random words with nothing to do with each other score around 0.9.
+
+The similarity you measure is mostly the shape of the space, not the relationship between
+the words.
+
+## Why the corrected measures matter
+
+If random pairs already score 0.9, then reporting that two occurrences of the same word
+score 0.95 tells you almost nothing. The paper's fix is to subtract the baseline: measure
+the expected similarity of random word pairs *in that same layer*, and report everything
+relative to it.
+
+This is the same move LEACE makes geometrically. Both are saying: correct for the
+distribution before you measure distances in it.
+
+## Why I care about a 2019 paper
+
+Every intervention method on this list does arithmetic in this space.
+
+Abliteration finds a direction by subtracting two means and removes it by orthogonal
+projection. [Safety Subspaces](https://arxiv.org/abs/2505.14185) compares subspaces with
+principal angles. [Concept Cones](https://arxiv.org/abs/2502.17420) checks whether two
+directions are orthogonal. All three are Euclidean operations, and all three assume the
+coordinate system is meaningful.
+
+In an anisotropic space, that assumption is doing unexamined work. A step that is small in
+coordinates can be large in the distribution, and two directions that look orthogonal can
+be highly correlated in terms of what the model actually does with them.
+
+There are two serious responses in the literature.
+[LEACE](https://arxiv.org/abs/2306.03819) whitens the space, projects in the whitened
+coordinates, and unwhitens, so the projection happens where orthogonality means what you
+want. [The causal inner product](https://arxiv.org/abs/2311.03658) argues for a specific
+non-Euclidean inner product, built from the inverse covariance of the vocabulary vectors,
+under which causally independent concepts really are orthogonal.
+
+Both are corrections for the same 2019 observation.

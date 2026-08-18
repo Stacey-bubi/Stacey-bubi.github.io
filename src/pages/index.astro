@@ -1,0 +1,118 @@
+---
+import { getCollection } from 'astro:content'
+import Base from '../layouts/Base.astro'
+import Controls from '../components/Controls.astro'
+import PaperCard from '../components/PaperCard.astro'
+import ReadingList from '../components/ReadingList.astro'
+import { THEMES_IN_ORDER, type ThemeKey } from '../data/themes'
+import { READING_LIST } from '../data/reading-list'
+import { href } from '../utils/url'
+
+const papers = await getCollection('papers')
+
+/** A paper earns its own page only if it has an MDX body. */
+const hasNote = (id: string) =>
+  Boolean(papers.find((p) => p.id === id)?.body?.trim())
+
+const sections = THEMES_IN_ORDER.map((theme) => ({
+  ...theme,
+  entries: papers.filter((p) => p.data.theme === theme.key)
+})).filter((s) => s.entries.length > 0)
+
+/**
+ * Chips cover any theme used by a card *or* by a reading-list item — otherwise
+ * themes that only appear in the queue (tooling, currently) have no way to be
+ * filtered to.
+ */
+const usedThemes = new Set<ThemeKey>([
+  ...papers.map((p) => p.data.theme),
+  ...READING_LIST.map((i) => i.theme)
+])
+const themeKeys = THEMES_IN_ORDER.filter((t) => usedThemes.has(t.key)).map(
+  (t) => t.key
+) as ThemeKey[]
+
+const path = papers
+  .filter((p) => p.data.pathOrder !== undefined)
+  .sort((a, b) => a.data.pathOrder! - b.data.pathOrder!)
+
+const title = 'Papers I keep coming back to'
+const description =
+  'An opinionated, annotated list of papers on the geometry of what is inside a language model, and on the attacks and defenses that live in that geometry.'
+---
+
+<Base title={title} description={description}>
+  <div class="wrap intro">
+    <h1>Papers I keep coming back to</h1>
+    <p>
+      Notes on refusal directions, concept erasure, and the shape of the space
+      those things live in. I wrote these for myself, so I would stop re-reading
+      the same papers from scratch every few months.
+    </p>
+    <p>
+      <strong>This is not a survey.</strong> Every entry has the question the paper
+      asks, what it contributes, how it was tested, the numbers worth remembering,
+      my own notes, and what I think its limits are. The notes and limitations are
+      mine and are labelled as mine — please do not read them as the paper's own
+      claims.
+    </p>
+    <p>
+      One argument runs through most of the list. The representation space inside
+      a model is not geometrically well behaved, and nearly every method for
+      finding or removing a concept quietly assumes that it is. The reading path
+      below follows that argument from the 2019 result that named the problem to
+      the 2025 result suggesting safety may not be linearly separable at all.
+    </p>
+  </div>
+
+  {
+    path.length > 0 && (
+      <div class="wrap">
+        <section class="path" id="start-here">
+          <h2>Start here</h2>
+          <p>
+            Read these {path.length} in order and they make one argument: the space is
+            distorted, so the tools we cut it with are less precise than they look,
+            and the thing we are trying to cut may not be a separate object at all.
+          </p>
+          <ol>
+            {path.map((p) => (
+              <li>
+                <a href={hasNote(p.id) ? href(`papers/${p.id}`) : `#${p.id}`}>
+                  {p.data.title}
+                </a>
+                {p.data.pathNote && <span set:html={p.data.pathNote} />}
+              </li>
+            ))}
+          </ol>
+        </section>
+      </div>
+    )
+  }
+
+  <Controls themeKeys={themeKeys} total={papers.length} />
+
+  <div class="wrap">
+    {
+      sections.map((section) => (
+        <section class="section" id={section.key} data-theme-section>
+          <div class="section__head" style={`--h:${section.hue}`}>
+            <h2>{section.label}</h2>
+            <p>{section.blurb}</p>
+          </div>
+          <div class="cards">
+            {section.entries.map((entry) => (
+              <PaperCard entry={entry} hasNote={hasNote(entry.id)} />
+            ))}
+          </div>
+        </section>
+      ))
+    }
+
+    <p class="empty">
+      Nothing matches that. Try a shorter search, or clear the theme filters.
+    </p>
+
+    {READING_LIST.length > 0 && <ReadingList items={READING_LIST} />}
+  </div>
+</Base>

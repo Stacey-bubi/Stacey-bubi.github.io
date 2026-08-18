@@ -1,0 +1,112 @@
+---
+title: "LEACE: Perfect Linear Concept Erasure in Closed Form"
+authors: Belrose, Schneider-Joseph, Ravfogel, Cotterell, Raff, Biderman
+year: 2023
+venue: NeurIPS 2023
+theme: erasure
+url: https://arxiv.org/abs/2306.03819
+code: https://github.com/EleutherAI/concept-erasure
+why: "The standard any new removal method should be measured against, and the one that does what abliteration skips: it corrects for the shape of the space before projecting anything out of it."
+question: "How do you remove information about one concept from a network's hidden states without damaging everything else? Earlier methods either left the concept partly recoverable or deleted useful features along with it. Is there a provably optimal linear transformation you can compute in closed form, without training?"
+contributions:
+  - "<strong>The guarantee.</strong> LEACE finds a transformation whose output has zero cross-covariance with the concept label, $\\text{Cov}(PX + b,\\, Z) = 0$. Because a linear classifier can only read a linear relationship, this means <em>no</em> linear classifier — however much data it is trained on — beats chance. That is much stronger than reporting that one probe's accuracy fell."
+  - "<strong>The objective.</strong> Among all transformations meeting that constraint, it takes the one that moves the activations least, minimising $\\mathbb{E}\\lVert PX + b - X\\rVert^2_M$. There is a closed-form solution, so nothing is trained and nothing is iterated."
+  - "<strong>Whitening is inside the solution.</strong> The transformation whitens the activations by $W$, projects onto the subspace that correlates with the concept, then unwhitens. It is an oblique projection, not an orthogonal one, which is why it preserves variance that orthogonal methods destroy."
+  - "<strong>Concept scrubbing.</strong> Applies LEACE layer by layer through a network, with each layer's scrubbed activations feeding the next so later layers adapt. This is required, not optional: clean one layer alone and the layers after it reconstruct the concept from correlated features left behind."
+evaluation: "Gender erasure on Bias in Bios (biographies labelled with profession and gender) using BERT; part-of-speech erasure on Universal Dependencies with $2^{22}$ sampled tokens, scrubbing Pythia and LLaMA models; the Pile validation split for language modelling quality. Metrics: logistic-regression accuracy on the erased concept, TPR-GAP for fairness, perplexity increase in bits, and how many dimensions of rank the method destroys. Baselines: INLP (iterative nullspace projection), RLACE (adversarial, gradient-based) and SAL (spectral attribute removal)."
+results:
+  - "On Bias in Bios, gender classification falls to chance while TPR-GAP drops from 0.198 to 0.084, and the correlation between that gap and gender composition falls from 0.867 to 0.392. Profession prediction accuracy barely moves: 77.3% against 79.3% for the untouched model."
+  - "The rank cost is the striking number. LEACE removes 17 dimensions where INLP removes 360 — INLP deletes whole dimensions, LEACE deletes only the correlation."
+  - "Part-of-speech scrubbing raises perplexity by 1.73–1.96 bits on LLaMA-7B through 30B. SAL costs 3.24–4.69 bits for the same job."
+  - "About two orders of magnitude faster than RLACE, because it is a formula rather than an adversarial optimisation."
+notes:
+  - "The step that matters most for my purposes is the whitening. Whitening compresses the stretched-out activation cloud back into a sphere, where variance is equal in every direction and features are uncorrelated. The projection happens there, in a space where 'orthogonal' means what you want it to mean, and then it is undone so the following layers still receive the distribution they were trained on."
+  - "That step is exactly what abliteration skips. Representation space is anisotropic — activations sit in a narrow cone and a handful of dimensions carry enormous variance. Project orthogonally in a space shaped like that and you take a large step along whatever high-variance axis is nearby, dragging unrelated features with you. LEACE removes the distortion first, then cuts."
+  - "The rediscovery result is more informative than the erasure result. If erasing a concept at one layer lets the next layer rebuild it, the direction you found was never the only copy. That should make anyone nervous about rank-one edits."
+  - "17 dimensions versus 360 is the whole argument for oblique over orthogonal projection in one number."
+limitations:
+  - "Linear only. The guarantee says nothing about a deep MLP probe, though in practice linear erasure does seem to hurt non-linear probes as well."
+  - "Collateral damage is measured as mean squared movement of the internal vectors, not as behaviour. The authors flag this themselves and say behavioural metrics would be the better test. Moving a vector a short distance and keeping a model useful are not the same claim."
+  - "A classifier can no longer read gender off the embeddings. Whether the model has stopped <em>behaving</em> in a biased way in harder settings is a different question, and this does not answer it."
+  - "It assumes the concept occupies a low-dimensional linear subspace. Same load-bearing assumption as everything else here."
+---
+
+## The two conditions
+
+LEACE asks for a transformation of the activations $X$ satisfying two things at once.
+
+**Erasure.** The cross-covariance between the transformed activations and the concept
+label $Z$ must be exactly zero:
+
+$$
+\operatorname{Cov}(PX + b,\, Z) = 0
+$$
+
+Zero cross-covariance is what makes every linear classifier useless. A linear classifier
+reads a linear relationship, and there is no longer one to read.
+
+**Minimal damage.** Among all transformations meeting that constraint, take the one that
+moves the activations least:
+
+$$
+\min \; \mathbb{E}\big[\lVert PX + b - X \rVert^2_M\big]
+$$
+
+The solution has a closed form. There is nothing to train and no adversarial game to play,
+which is where the two-orders-of-magnitude speedup over RLACE comes from.
+
+## Why whitening is the whole point
+
+Here is the part that connects this paper to everything else on the list.
+
+The obvious way to remove a direction is orthogonal projection: find the concept
+direction, subtract its component along that axis, done. That is what
+[abliteration](https://arxiv.org/abs/2406.11717) does, and what INLP did before it.
+
+Orthogonal projection assumes the space is round. It is not. Contextual representations
+are [anisotropic](https://aclanthology.org/D19-1006/): the vectors occupy a narrow cone
+instead of filling the space, and a few rogue dimensions carry variance far out of
+proportion to the rest. In a space stretched like that, a step that is orthogonal in
+coordinates is a large step along a high-variance axis in practice. That is where
+collateral damage comes from.
+
+LEACE handles it in four steps:
+
+1. Take the covariance of the activations, $\Sigma_{XX}$.
+2. **Whiten**: apply $W$, compressing the stretched cone into a sphere where variance is
+   1 in every direction and features are uncorrelated.
+3. Project *there*, in the well-behaved space, where orthogonality means what you want it
+   to mean.
+4. **Unwhiten**, returning the space to its original shape so the following layers do not
+   receive a distribution they have never seen.
+
+The projection is the easy part. Choosing the coordinate system to project in is the paper.
+
+The 17-versus-360 rank comparison is this argument made concrete. INLP, projecting
+orthogonally and iteratively, destroys 360 dimensions of the representation to erase one
+concept. LEACE destroys 17.
+
+## Rediscovery, and why one layer is never enough
+
+Erase the concept at layer 5, probe at layer 12, and it is back.
+
+The information is redundant enough across the residual stream that later computation
+rebuilds it from correlated features that were left in place. So LEACE has to be applied
+at every layer in sequence, each layer's output feeding the next, and only then is the
+concept gone from the model rather than from one slice of it.
+
+I find this more useful than the erasure guarantee itself. It says the linear direction
+you found was one copy among several.
+
+## What I want to do with it
+
+The obvious experiment, which the paper does not run: use LEACE instead of orthogonal
+projection to remove a refusal direction.
+
+Abliteration's known cost is that the model gets worse at unrelated things — Qwen2.5-14B
+loses 7.5 points of TruthfulQA. If that damage is geometric, caused by projecting in a
+distorted space, whitening first should reduce it. Either it does, which says the damage
+was an artefact of the metric, or it does not, which says refusal and capability are
+genuinely entangled and no amount of careful projection separates them. That second answer
+is roughly what [Safety Subspaces](https://arxiv.org/abs/2505.14185) argues, and it would
+be the more interesting result.

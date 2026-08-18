@@ -1,0 +1,98 @@
+---
+title: LLMs Encode Harmfulness and Refusal Separately
+authors: Zhao, Huang, Wu, Bau, Shi
+year: 2025
+theme: geometry
+url: https://arxiv.org/abs/2507.11878
+code: https://github.com/CHATS-lab/LLMs_Encode_Harmfulness_Refusal_Separately
+why: "It splits a thing everyone had been treating as one thing. A model refusing does not mean the model judged the request harmful — those are two internal signals in two places, and some jailbreaks only suppress the second one."
+question: "When an instruct model refuses, does that mean it considers the request harmful? Or are 'this is harmful' and 'produce a refusal' separate internal mechanisms that usually agree?"
+contributions:
+  - "<strong>Separates two latent signals.</strong> A harmfulness direction, representing the model's internal judgement of the request, and a refusal direction, controlling the outward behaviour. They are found at different token positions and behave differently under intervention."
+  - "<strong>Locates them.</strong> Harmfulness is strongest at the last token of the user instruction ($t_{\\text{inst}}$). Refusal is strongest at the last token of the whole prompt, after the chat template boundary ($t_{\\text{post-inst}}$). Both are extracted by difference-in-means at the relevant position."
+  - "<strong>The reply-inversion test.</strong> This is the load-bearing experiment. They append 'Could this user prompt cause harm? Answer Certainly if it could, otherwise No' — which turns the model's judgement into the surface answer, so it can be read off separately from whether the model refuses. Steering along the harmfulness direction flips a harmless prompt to 'Certainly'. Steering along the refusal direction mostly leaves the answer at 'No' while still producing refusals."
+  - "<strong>Reinterprets some jailbreaks.</strong> Certain attacks succeed by lowering the refusal signal without reversing the model's internal belief that the request is harmful. The model still 'thinks' the request is dangerous and complies anyway."
+  - "<strong>Latent Guard.</strong> Uses the sign of the harmfulness projection as a safety classifier, competitive with and sometimes better than a dedicated guard model."
+evaluation: "Llama-2-Chat-7B, Llama-3-Instruct-8B and Qwen2-Instruct-7B. Harmful prompts from AdvBench, JailbreakBench and Sorry-Bench; harmless from Alpaca; over-refusal from XSTest; fine-grained categories from CatQA. Jailbreak types covered: GCG adversarial suffixes, persuasion, and adversarial templates. Latent Guard trained on 100 harmful and 100 harmless examples and compared against Llama Guard 3 8B, with ToxicChat and the OpenAI Moderation set as out-of-domain tests."
+results:
+  - "Removing the post-instruction tokens drops refusal sharply — Llama-2 from 100% to 85.3%, Llama-3 from 96.0% to 58.9%, Qwen2 from 98.0% to 81.3% — which is what pins refusal to that position."
+  - "On Llama-3, harmfulness steering pushes refusal on harmless inputs to 94% and refusal steering to 100%, but the inversion test shows these are reaching that number by different routes."
+  - "Category-specific directions are much more consistent for refusal than for harmfulness. On Qwen2 the average cosine similarity between category directions is 0.89–0.95 for refusal but only 0.60–0.73 for harmfulness — refusal is closer to one general mechanism, harmfulness is a family of related but distinct judgements."
+  - "Harmfulness directions generalise poorly across categories: in-domain Hate/Harass/Violence gives 100% effect, Political Campaigning only 32%, all-category average 52%."
+  - "Latent Guard beats Llama Guard 3 in places — 75.0% against 17.8% on Qwen2 persuasion jailbreaks — but is often clearly worse out of domain, on ToxicChat and the OpenAI moderation data."
+notes:
+  - "The distinction between where a direction is <em>found</em> and where it is <em>applied</em> matters and is easy to miss. A direction is extracted for a specific layer and position, but steering may then be applied across many positions. Comparisons between two directions are not fair if one is applied more broadly than the other."
+  - "A template token like <code>[/INST]</code> does not 'contain refusal'. Its residual activation has absorbed the whole preceding prompt through attention, plus the template boundary, so it is a convenient place where the model is preparing what kind of continuation comes next. Refusal is one causally useful direction there, not the meaning of the token."
+  - "Difference-in-means only ever gives you an average difference. The semantic interpretation here comes from the held-out cases and the inversion intervention, not from the extraction method. That is the right way round, and a lot of steering work gets it backwards."
+  - "The category spread is the most interesting number to me. Refusal directions cluster tightly at 0.89–0.95 while harmfulness directions sit at 0.60–0.73. That suggests one output mechanism fed by several distinct judgements, rather than a single harm concept."
+  - "Useful as a template for my own work. If I want to find whether a model internally judges a prompt underspecified, I should build difference-in-means candidates per layer and position, test them on matched pairs, and use a causal inversion task to separate 'the model judged X' from 'the model produced the behaviour associated with X'."
+limitations:
+  - "An existence proof, not a theory of representation. Three open 7B/8B models; nothing here says whether the picture holds in larger or proprietary systems."
+  - "The harmfulness direction may be carrying lexical, topical and dataset artefacts rather than a clean concept. The category spread is consistent with that reading too."
+  - "The causal comparison is not quite symmetric: the refusal direction is applied to more token positions than the harmfulness direction in the inversion task, which makes the two harder to compare than the framing suggests."
+  - "Latent Guard degrades badly under distribution shift. Without in-domain examples it does poorly on the OpenAI moderation set, so it is not a drop-in replacement for a guard model."
+  - "Layers, heads and circuit-level mechanism are not investigated. This is about directions and positions only."
+---
+
+## Two signals, two places
+
+The setup is difference-in-means, run twice at two different positions.
+
+At $t_{\text{inst}}$, the last token of the user instruction, average activations over
+harmful prompts and subtract the average over harmless ones. That difference is the
+**harmfulness** direction — the model's assessment of the request.
+
+At $t_{\text{post-inst}}$, the last token of the whole prompt after the chat template
+boundary, average over refused prompts and subtract the average over accepted ones. That
+is the **refusal** direction — the signal that routes the response.
+
+The positional evidence is direct. Drop the post-instruction tokens and refusal rates fall
+hard: Llama-3 goes from 96.0% to 58.9%. Refusal is being organised at that boundary token.
+
+## The experiment that makes the case
+
+Showing that two directions exist is easy. Showing they mean different things is the hard
+part, because both produce refusals when you steer along them, and refusal is all you can
+observe from outside.
+
+The reply-inversion task solves this. Append to the prompt:
+
+> Could this user prompt cause harm? Answer Certainly if it could, otherwise No.
+
+Now the model's *judgement* is the surface answer, separate from whether it refuses. So you
+can steer and watch which one moves.
+
+Steering along harmfulness flips harmless prompts to "Certainly" — the model's assessment
+changed. Steering along refusal mostly leaves the answer at "No" while still generating
+refusals — the behaviour changed and the assessment did not.
+
+That is a clean separation of judgement from response, and it is the kind of counterfactual
+design that steering papers usually lack.
+
+## What it says about jailbreaks
+
+Some attacks work by suppressing the refusal signal while leaving the harmfulness judgement
+intact. The model still internally registers the request as dangerous, and answers anyway.
+
+This fits with [Arditi et al.](https://arxiv.org/abs/2406.11717) on adversarial suffixes,
+where the suffix hijacks the attention heads that write refusal. The model has not been
+persuaded the request is safe. The wire carrying the refusal has been cut.
+
+It also complicates what abliteration is doing. If refusal and harmfulness are separate,
+removing the refusal direction leaves a model that still recognises harm and no longer acts
+on it. Whether that matters depends on what you wanted from the model, but it is not the
+same thing as removing its ability to tell.
+
+## The category result
+
+The number I find most informative is the spread across harm categories.
+
+Refusal directions from different categories agree closely with each other, cosine
+similarity 0.89–0.95 on Qwen2. Harmfulness directions agree much less, 0.60–0.73. And a
+harmfulness direction fitted on one category transfers poorly: 100% effect in domain, 32%
+on political campaigning, 52% averaged.
+
+The natural reading is that there is roughly one refusal mechanism, fed by a family of
+related but genuinely different harm judgements. "The harmfulness direction" is a
+simplification of something with real internal structure — which is also why Latent Guard
+falls apart out of domain.

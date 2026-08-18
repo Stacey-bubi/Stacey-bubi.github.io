@@ -1,0 +1,72 @@
+---
+title: Finding Alignments Between Interpretable Causal Variables and Distributed Neural Representations
+authors: Geiger, Wu, Potts, Icard, Goodman
+year: 2024
+venue: CLeaR 2024
+theme: geometry
+url: https://arxiv.org/abs/2303.02536
+why: "The right way to ask where a concept lives. Instead of guessing which neurons hold it, DAS learns a rotation of the space and finds the basis the concept is aligned with. Concept Cones does the same trick for refusal — this is where the trick comes from."
+question: "Where does a given concept actually live inside a network? Earlier causal abstraction methods had to brute-force search over possible alignments between a high-level variable and sets of neurons, and assumed each variable maps onto its own disjoint group of neurons. Both assumptions are wrong in a network that stores things in superposition."
+contributions:
+  - "<strong>Distributed Alignment Search (DAS).</strong> Replaces the brute-force search over alignments with gradient descent. The alignment becomes a learned object rather than something enumerated."
+  - "<strong>Learns a rotation of the representation space.</strong> Rather than testing subsets of neurons, DAS learns a rotation matrix into a non-standard basis, and looks for the concept along directions in that rotated frame. So a concept can be a direction, or a subspace, that no set of individual neurons corresponds to."
+  - "<strong>Drops the disjointness assumption.</strong> A single neuron can take part in several high-level variables at once, which is what you need if the network stores features in superposition."
+  - "<strong>Validates by intervention, not correlation.</strong> The criterion is the interchange intervention: swap the value of the candidate representation between two inputs and check the output changes the way the high-level causal model predicts. Getting that right is a causal claim, not a probing accuracy."
+  - "<strong>Finds exact alignments on controlled tasks</strong> — binary high-level variables encoding simple equality and lexical entailment relations — where earlier methods found nothing."
+notes:
+  - "The rotation is the important idea, and it is the same one that keeps recurring on this list. The neuron basis is arbitrary. Concepts have no reason to line up with it. If you only look at axis-aligned groups of neurons, you will miss anything stored at an angle — which, under superposition, is nearly everything."
+  - "<a href='https://arxiv.org/abs/2502.17420'>Concept Cones</a> is doing a version of this for refusal: stop hand-picking a direction and optimise for one instead. The lineage runs through here."
+  - "The evaluation standard is stricter than what most steering papers use. A probe finding a concept only shows the information is present. An interchange intervention that changes the output as predicted shows the model is using it."
+  - "There is a well-known worry about this method: a sufficiently expressive learned rotation can find structure that is not really there, because the search itself is powerful enough to fit something. Any DAS result needs held-out evaluation to be believable, and this is worth remembering whenever a paper reports that gradient descent located a concept."
+limitations:
+  - "The tasks are small and controlled by design. That is what makes the alignments verifiable, but it also means the demonstration is on simple relations, not on anything like refusal."
+  - "It requires a high-level causal model specified in advance. You have to know what hypothesis you are testing, so it is a tool for checking a theory, not for discovering one."
+  - "Learning an alignment by gradient descent risks finding a rotation that fits rather than one that reflects the network's own structure. The more expressive the search, the more careful the validation has to be."
+---
+
+## The problem with looking at neurons
+
+Causal abstraction asks whether a simple interpretable model is a faithful description of
+what a network is doing. The test is the interchange intervention: take the part of the
+network you think holds variable $V$, swap its value between two inputs, and see whether
+the output changes as the high-level model says it should.
+
+The hard part is knowing which part of the network to swap. Earlier work searched over sets
+of neurons, which has two problems. The search is combinatorial, and it presumes that a
+variable lives in some group of neurons in the first place.
+
+Under superposition, that presumption fails.
+[Features are stored as directions that are not axis-aligned](https://transformer-circuits.pub/2022/toy_model/index.html),
+and one neuron participates in many features. Searching over neuron groups is searching a
+basis the network never agreed to use.
+
+## What DAS does instead
+
+Learn the basis.
+
+DAS optimises a rotation matrix by gradient descent, mapping the activation space into a
+new frame. The concept is then looked for along directions in that rotated space. Nothing
+requires the result to correspond to any set of neurons, and one neuron can contribute to
+several variables at once.
+
+The objective is still the interchange intervention, so the criterion stays causal: a good
+alignment is one where swapping the identified representation produces the output change
+the high-level model predicts.
+
+On controlled tasks with binary variables — equality, lexical entailment — DAS recovers
+exact alignments where the neuron-subset search found nothing.
+
+## Why it belongs on a list about refusal
+
+The methodological pattern here is the one worth taking.
+
+Difference-in-means picks a direction by a formula and then hopes it is the right one.
+DAS defines what makes a direction correct — it must support the causal intervention — and
+searches for one that satisfies it.
+[Concept Cones](https://arxiv.org/abs/2502.17420) applies that same logic to refusal:
+define the objective, optimise the direction, and get both a better direction and a more
+honest picture of the structure.
+
+The caution comes with it. A learned rotation is a powerful search, and a powerful search
+can find structure that is not there. Whenever a paper says gradient descent located a
+concept, the question to ask is what was held out.

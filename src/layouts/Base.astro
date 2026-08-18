@@ -1,0 +1,116 @@
+---
+import '../styles/global.css'
+import { asset, href } from '../utils/url'
+
+interface Props {
+  title: string
+  description: string
+}
+
+const { title, description } = Astro.props
+const canonical = new URL(Astro.url.pathname, Astro.site).toString()
+const built = new Date()
+const year = built.getFullYear()
+const lastUpdated = built.toLocaleDateString('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric'
+})
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+
+    <link rel="icon" href={asset('favicon.svg')} type="image/svg+xml" />
+    <link rel="stylesheet" href={asset('katex/katex.min.css')} />
+
+    {/* Applied before first paint so the page never flashes the wrong theme. */}
+    <script is:inline>
+      ;(() => {
+        try {
+          const saved = localStorage.getItem('theme')
+          if (saved === 'dark' || saved === 'light') {
+            document.documentElement.dataset.theme = saved
+          }
+        } catch {
+          /* private mode, storage blocked — fall through to system preference */
+        }
+      })()
+    </script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="wrap site-header__row">
+        <p class="site-title"><a href={href()}>Papers I keep coming back to</a></p>
+        <nav class="site-nav">
+          <a href={href('about')}>About</a>
+          <a href="https://github.com/Stacey-bubi" rel="me">GitHub</a>
+          <button
+            class="theme-toggle"
+            type="button"
+            id="theme-toggle"
+            aria-label="Switch between light and dark"
+          >
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
+            </svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+            </svg>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <slot name="footer" />
+        <p>
+          Notes and opinions are my own. Last updated {lastUpdated}.
+        </p>
+        <p>
+          Built with <a href="https://astro.build">Astro</a>, hosted on GitHub
+          Pages.
+          <a href="https://github.com/Stacey-bubi/Stacey-bubi.github.io">Source</a>
+          &middot; <a href={href('about')}>About</a>
+        </p>
+        <p>&copy; {year}</p>
+      </div>
+    </footer>
+
+    <script is:inline>
+      document.getElementById('theme-toggle')?.addEventListener('click', () => {
+        const root = document.documentElement
+        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        const current = root.dataset.theme || (systemDark ? 'dark' : 'light')
+        const next = current === 'dark' ? 'light' : 'dark'
+        root.dataset.theme = next
+        try {
+          localStorage.setItem('theme', next)
+        } catch {
+          /* nothing to do — the choice just will not persist */
+        }
+      })
+    </script>
+  </body>
+</html>

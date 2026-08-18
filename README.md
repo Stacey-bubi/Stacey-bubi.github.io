@@ -1,0 +1,91 @@
+# Papers I keep coming back to
+
+An annotated, opinionated list of papers on the geometry of representation spaces
+inside language models, and the attacks and defenses that live in that geometry.
+
+Built with Astro, deployed to GitHub Pages at
+<https://stacey-bubi.github.io/>.
+
+## Running it
+
+```bash
+npm install
+npm run dev
+```
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Dev server on <http://localhost:4321> |
+| `npm run build` | Static build into `dist/` |
+| `npm run preview` | Serves the built site on <http://localhost:4322> |
+| `npm run check` | Type-checks Astro, TypeScript and content frontmatter |
+
+## Adding a paper
+
+Create `src/content/papers/<slug>.mdx`. The slug becomes the URL and the anchor
+on the home page.
+
+```mdx
+---
+title: Paper title exactly as published
+authors: Surname, Surname, Surname
+year: 2025
+venue: NeurIPS 2025          # omit if unpublished
+theme: geometry              # geometry | erasure | attack | defense | internals | tooling
+url: https://arxiv.org/abs/…  # omit rather than guess
+code: https://github.com/…    # optional
+why: One line. The opinionated hook, always visible on the card.
+question: What the paper is asking.
+contributions:
+  - What the paper contributes, in its own right.
+evaluation: Models, datasets, metrics and baselines in one paragraph.  # optional
+results:
+  - Headline numbers worth remembering.                                # optional
+notes:
+  - My own reading. Clearly mine, not the paper's.                     # optional
+limitations:
+  - Where I think it is weak.                                          # optional
+pathOrder: 3                 # optional: position in the "start here" path
+pathNote: One line on its role in that path.
+---
+
+Optional MDX body. Its presence is what creates the /papers/<slug>/ page and the
+"read the full note" link on the card. No body means the card is the whole entry.
+```
+
+Notes on the fields:
+
+- **`contributions` is what the paper claims; `notes` is what I think.** Keep the
+  line clean. A baseline the paper compares against does not belong in
+  `contributions`.
+- Card fields accept inline HTML (`<em>`, `<code>`, `<a>`) and inline maths with
+  `$…$`, rendered by `src/utils/math.ts`. Display maths (`$$…$$`) only works in
+  the body.
+- Escape backslashes in frontmatter maths: `$r = \\mu - \\nu$`.
+- **Never guess a URL.** Omit the field instead. Check links with:
+
+  ```bash
+  grep -ohE 'https?://[^ )"<>]+' src/content/papers/*.mdx | sort -u | while read -r u; do echo "$(curl -sIL -o /dev/null -w '%{http_code}' "$u")  $u"; done
+  ```
+
+Papers not yet written up go in `src/data/reading-list.ts` as title, theme and a
+verified link — no invented summaries.
+
+## Deployment
+
+Pushing to `main` triggers `.github/workflows/deploy.yml`, which builds and
+publishes to GitHub Pages. The repository needs **Settings → Pages → Source: GitHub
+Actions** set once, by hand.
+
+`site` and `base` are the first two constants in `astro.config.mjs`. A repo named
+`<user>.github.io` uses `base: '/'`; any other name needs `base: '/<repo>'`.
+Getting this wrong is the classic "site deploys but every stylesheet 404s".
+
+## Notes on the build
+
+- KaTeX CSS and woff2 fonts are vendored into `public/katex/`, so the published
+  page makes **zero external requests**.
+- Filtering, search, sorting and expand-all are ~90 lines of vanilla JS in
+  `src/components/Controls.astro`. No search index, no framework.
+- Themes are defined once in `src/data/themes.ts`; the `hue` there drives every
+  chip colour through a CSS custom property.

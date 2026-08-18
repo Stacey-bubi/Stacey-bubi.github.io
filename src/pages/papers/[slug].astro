@@ -1,0 +1,75 @@
+---
+import { getCollection, render, type CollectionEntry } from 'astro:content'
+import Base from '../../layouts/Base.astro'
+import { THEMES } from '../../data/themes'
+import { href } from '../../utils/url'
+
+export async function getStaticPaths() {
+  const papers = await getCollection('papers')
+  return papers
+    .filter((p) => p.body?.trim())
+    .map((entry) => ({ params: { slug: entry.id }, props: { entry } }))
+}
+
+interface Props {
+  entry: CollectionEntry<'papers'>
+}
+
+const { entry } = Astro.props
+const p = entry.data
+const theme = THEMES[p.theme]
+const { Content } = await render(entry)
+---
+
+<Base title={`${p.title} — notes`} description={p.why.replace(/<[^>]+>/g, '')}>
+  <div class="wrap paper-head" style={`--h:${theme.hue}`}>
+    <a class="back-link" href={href()}>&larr; All papers</a>
+    <h1>{p.title}</h1>
+
+    <p class="meta">
+      <span class="tag">{theme.label}</span>
+      {p.authors && <span>{p.authors}</span>}
+      <span class="sep">·</span>
+      <span>{p.year}</span>
+      {
+        p.venue && (
+          <>
+            <span class="sep">·</span>
+            <span>{p.venue}</span>
+          </>
+        )
+      }
+      {
+        p.url && (
+          <>
+            <span class="sep">·</span>
+            <a href={p.url} rel="noopener">
+              paper
+            </a>
+          </>
+        )
+      }
+      {
+        p.code && (
+          <>
+            <span class="sep">·</span>
+            <a href={p.code} rel="noopener">
+              code
+            </a>
+          </>
+        )
+      }
+    </p>
+
+    <p class="why">
+      <b>Why it is here</b>
+      <Fragment set:html={p.why} />
+    </p>
+  </div>
+
+  <div class="wrap">
+    <article class="prose">
+      <Content />
+    </article>
+  </div>
+</Base>

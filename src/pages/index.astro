@@ -56,13 +56,6 @@ const description =
       mine and are labelled as mine — please do not read them as the paper's own
       claims.
     </p>
-    <p>
-      One argument runs through most of the list. The representation space inside
-      a model is not geometrically well behaved, and nearly every method for
-      finding or removing a concept quietly assumes that it is. The reading path
-      below follows that argument from the 2019 result that named the problem to
-      the 2025 result suggesting safety may not be linearly separable at all.
-    </p>
   </div>
 
   {
@@ -71,7 +64,7 @@ const description =
         <section class="path" id="start-here">
           <h2>Start here</h2>
           <p>
-            Read these {path.length} in order and they make one argument: the space is
+            These {path.length} make this argument: the space is
             distorted, so the tools we cut it with are less precise than they look,
             and the thing we are trying to cut may not be a separate object at all.
           </p>
@@ -110,7 +103,7 @@ const description =
     }
 
     <p class="empty">
-      Nothing matches that. Try a shorter search, or clear the theme filters.
+      Nothing matches that!
     </p>
 
     {READING_LIST.length > 0 && <ReadingList items={READING_LIST} />}

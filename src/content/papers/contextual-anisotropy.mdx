@@ -60,7 +60,7 @@ distribution before you measure distances in it.
 Every intervention method on this list does arithmetic in this space.
 
 Abliteration finds a direction by subtracting two means and removes it by orthogonal
-projection. [Safety Subspaces](https://arxiv.org/abs/2505.14185) compares subspaces with
+projection(it works empirically). [Safety Subspaces](https://arxiv.org/abs/2505.14185) compares subspaces with
 principal angles. [Concept Cones](https://arxiv.org/abs/2502.17420) checks whether two
 directions are orthogonal. All three are Euclidean operations, and all three assume the
 coordinate system is meaningful.
@@ -69,11 +69,10 @@ In an anisotropic space, that assumption is doing unexamined work. A step that i
 coordinates can be large in the distribution, and two directions that look orthogonal can
 be highly correlated in terms of what the model actually does with them.
 
-There are two serious responses in the literature.
+There are some serious responses in the literature.
 [LEACE](https://arxiv.org/abs/2306.03819) whitens the space, projects in the whitened
 coordinates, and unwhitens, so the projection happens where orthogonality means what you
 want. [The causal inner product](https://arxiv.org/abs/2311.03658) argues for a specific
 non-Euclidean inner product, built from the inverse covariance of the vocabulary vectors,
 under which causally independent concepts really are orthogonal.
 
-Both are corrections for the same 2019 observation.

@@ -1,8 +1,10 @@
 ---
 import { getCollection, render, type CollectionEntry } from 'astro:content'
 import Base from '../../layouts/Base.astro'
+import PaperFields from '../../components/PaperFields.astro'
 import { THEMES } from '../../data/themes'
 import { href } from '../../utils/url'
+import { inlineMath } from '../../utils/math'
 
 export async function getStaticPaths() {
   const papers = await getCollection('papers')
@@ -63,12 +65,17 @@ const { Content } = await render(entry)
 
     <p class="why">
       <b>Why it is here</b>
-      <Fragment set:html={p.why} />
+      <Fragment set:html={inlineMath(p.why)} />
     </p>
   </div>
 
   <div class="wrap">
-    <article class="prose">
+    {/* Same structured summary as the home page card, open by default here. */}
+    <section class="paper-fields">
+      <PaperFields data={p} />
+    </section>
+
+    <article class="prose prose--paper">
       <Content />
     </article>
   </div>

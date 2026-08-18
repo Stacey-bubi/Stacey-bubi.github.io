@@ -6,83 +6,88 @@ venue: ICLR 2026
 theme: attack
 url: https://arxiv.org/abs/2412.09565
 code: https://github.com/LukeBailey181/obfuscated-activations
-why: "The attack that breaks the whole defensive strategy of watching activations. If a model can do the harmful thing while its internals look innocent, then probes, sparse autoencoders and circuit breakers are all monitoring a signal an attacker controls."
+why: "The attack that breaks the whole defensive strategy of watching activations. If a model can do the harmful thing while its internals look innocent, then probes, sparse autoencoders and circuit breakers are all monitoring a signal the attacker controls."
 question: "Latent-space defenses read a model's activations to catch harmful behaviour before it reaches the output. Can an attacker produce the harmful behaviour while keeping the activations looking benign to the monitor?"
 contributions:
-  - "<strong>Defines obfuscated activations.</strong> Activation patterns reshaped to preserve the harmful behaviour while evading detection. The core finding is that activations are highly malleable — the same output can be produced from many different internal states."
-  - "<strong>Breaks a broad range of defenses, not one.</strong> Supervised probes (logistic regression and MLPs), OOD detectors (Gaussian, VAE, Mahalanobis), sparse autoencoders, Circuit Breakers, Latent Adversarial Training, and backdoor-specific detectors (Beatrix, TED)."
-  - "<strong>Four attack routes at different access levels.</strong> Embedding suffix attacks, optimised jointly for behaviour and evasion, needing white-box access. Hard prompt attacks with real tokens using a gradient-free optimiser, needing only gray-box access. Fine-tuning with an explicit obfuscation loss, when the attacker controls training. And data poisoning, which achieves obfuscation with no explicit optimisation at all."
-  - "<strong>Shows adversarial training does not close it.</strong> After more than 70 epochs of alternating attack and defence, attackers still bypassed the adversarially trained monitors — which suggests obfuscated representations are abundant rather than rare."
-  - "<strong>Finds a real limit.</strong> Obfuscation is not free. On a task requiring precise computation — writing SQL — obfuscating against more layers correlates significantly with worse benchmark performance."
-evaluation: "Llama-3-8B-Instruct as the main model for harmfulness experiments, plus its Circuit Breakers and LAT-trained variants, and Gemma-2-2b for the SQL and sparse autoencoder work. Data from UltraChat and XSTest (benign), the Circuit Breakers dataset (harmful), SQLEval, Bias in Bios for complex triggers, and custom backdoor datasets."
-results:
-  - "Against harmfulness probes, obfuscation attacks cut recall from 100% to 0% while keeping roughly a 90% jailbreak rate."
-  - "Generation-based probes reach over 90% recall at 1% false positive rate against ordinary jailbreaks, and fail completely against obfuscation."
-  - "Sparse autoencoder monitors fall to near-zero recall under embedding attacks while the model still produces working SQL. Raw SAE latents are no more robust than plain probes."
-  - "Obfuscation trained against OOD detectors transfers to supervised probes, though less well to generation-based monitors."
-notes:
-  - "This is the strongest argument I know against treating latent monitoring as a security boundary. A probe measures a correlation between activations and behaviour that held on the data it was fitted on. An attacker optimising against the probe is optimising exactly that correlation away."
-  - "The sparse autoencoder result deserves more attention than it got. SAEs are often presented as recovering the model's real features, which would make them a more principled monitor than an arbitrary probe. Here they are just as bypassable."
-  - "It fits the pattern of the rest of this list from the defensive side. <a href='https://arxiv.org/abs/2502.17420'>Concept Cones</a> shows many directions mediate a behaviour; this shows an attacker can pick which of them to route through. If the behaviour can be produced from many internal states, a monitor watching one region is watching a small part of the space."
-  - "The SQL result is the most hopeful thing here, and it is a narrow hope: obfuscation costs capability when the task needs precision. That suggests a defence built on making the model do something genuinely hard, rather than on detecting a signature."
-limitations:
-  - "The strongest attacks need white-box access to embeddings. Hard prompt attacks work with less but take considerable tuning effort."
-  - "Black-box transferability is barely explored, which is what would matter for API-served models."
-  - "Small samples in places — 20 harmful queries in some experiments, with confidence intervals reported."
-  - "The obfuscation-versus-capability trade-off is demonstrated but not characterised, so there is no way to say how much capability a given amount of evasion costs."
-  - "The adversarial training result is empirical over a finite budget. It shows attackers won for 70 epochs, not that defenders cannot win eventually."
+  - "<strong>Defines obfuscated activations.</strong> Activation patterns reshaped to preserve the harmful behaviour while evading detection. The core finding is that activations are highly malleable: the same output can be produced from many different internal states."
+  - "<strong>Breaks a broad range of defenses, not one</strong> — supervised probes, OOD detectors, sparse autoencoders, Circuit Breakers, latent adversarial training, and backdoor-specific detectors."
+  - "<strong>Four attack routes at different access levels</strong>, from white-box embedding suffixes down to data poisoning, which achieves obfuscation with no explicit optimisation at all."
+  - "<strong>Finds a real limit:</strong> obfuscation costs capability. On a task needing precise computation, obfuscating against more layers correlates significantly with worse performance."
 ---
 
 ## The threat model
 
-Latent-space defenses work on a reasonable premise. Even if you cannot filter every harmful
+Latent-space defenses rest on a reasonable premise. Even if you cannot filter every harmful
 output, harmful behaviour must pass through the model's internal states, so watch those
 instead. Train a probe on activations, or use a sparse autoencoder, or an OOD detector, and
 catch the behaviour before it surfaces.
 
-This paper asks whether the internal state is a reliable place to watch, and finds it is
-not. Activations are malleable: the same harmful output can be produced from many different
-internal configurations, and an attacker can choose one the monitor was not trained to
-flag.
+This paper asks whether the internal state is a reliable place to watch, and finds it is not.
+Activations are malleable: the same harmful output can be produced from many different
+internal configurations, and an attacker can choose one the monitor was never trained to flag.
 
 ## Four ways in
 
-The attacks are graded by how much access the attacker has, which is what makes the result
-hard to dismiss:
+The attacks are graded by how much access the attacker has, which is what makes the result hard
+to dismiss.
 
-- **Embedding suffix attacks.** A universal suffix in embedding space, optimised jointly
-  for the harmful behaviour and for evading the monitor. White-box.
-- **Hard prompt attacks.** Real tokens, optimised per input with a gradient-free method.
-  Gray-box — output access only.
-- **Fine-tuning with an obfuscation loss.** When the attacker controls training, evasion
-  becomes an explicit training objective.
-- **Data poisoning.** Choose trigger complexity and poison rate carefully and obfuscation
-  appears without anyone optimising for it.
+**Embedding suffix attacks** put a universal suffix in embedding space, optimised jointly for
+the harmful behaviour and for evading the monitor. White-box. **Hard prompt attacks** use real
+tokens, optimised per input with a gradient-free method, needing only output access.
+**Fine-tuning with an obfuscation loss** applies when the attacker controls training, making
+evasion an explicit objective. And **data poisoning** achieves obfuscation by choosing trigger
+complexity and poison rate carefully, with nobody optimising for evasion at all.
 
-That last one is the most uncomfortable. Evasion does not require an adversary who
-understands the defence. It can be a side effect of how the poisoned data was constructed.
+That last one is the most uncomfortable. Evasion does not require an adversary who understands
+the defence. It can be a side effect of how the poisoned data was constructed.
 
 ## The numbers that matter
 
-Probe recall goes from 100% to 0% while about 90% of jailbreaks still succeed. The monitor
-does not degrade — it stops working, while the attack keeps working.
+Against harmfulness probes on Llama-3-8B-Instruct, obfuscation cuts recall from **100% to 0%**
+while keeping roughly a **90% jailbreak rate**. The monitor does not degrade — it stops working
+while the attack keeps working.
 
-Generation-based probes, which look at activations during generation rather than on the
-prompt, do better against ordinary jailbreaks: over 90% recall at a 1% false positive rate.
-Against obfuscation they fail completely.
+Generation-based probes, which watch activations during generation rather than on the prompt,
+do better against ordinary jailbreaks: over 90% recall at a 1% false positive rate. Against
+obfuscation they fail completely.
 
-And sparse autoencoders offer no extra protection. This one is worth dwelling on, because
-SAEs are frequently described as recovering the features the model actually uses, which
-should make an SAE-based monitor more principled than a probe fitted to a label. Under
-attack they behave the same.
+Adversarial training does not close the gap either. After more than 70 epochs of alternating
+attack and defence, attackers were still bypassing the trained monitors, which suggests
+obfuscated representations are abundant rather than rare.
+
+## The sparse autoencoder result deserves more attention
+
+SAE-based monitors fall to near-zero recall under embedding attacks while the model still
+produces working SQL. Raw SAE latents are no more robust than plain probes.
+
+This one is worth dwelling on, because SAEs are frequently described as recovering the features
+the model actually uses — which should make an SAE-based monitor more principled than a probe
+fitted to a label. Under attack they behave the same.
 
 ## Where the hope is
 
 Obfuscation is not free. On SQL generation, obfuscating against more layers correlates
-significantly with worse performance. Constraining your own internal states enough to fool
-a monitor costs you the ability to do things that need those states.
+significantly with worse benchmark performance. Constraining your own internal states enough to
+fool a monitor costs you the ability to do things that need those states.
 
-That points somewhere different from better detectors. If evasion is expensive on hard
-tasks, a defence might be built on requiring the model to do something that genuinely needs
-its full representational capacity — making obfuscation and capability compete — rather than
-on recognising what harm looks like from the inside.
+That points somewhere different from better detectors. If evasion is expensive on hard tasks, a
+defence might be built on requiring the model to do something that genuinely needs its full
+representational capacity — making obfuscation and capability compete — rather than on
+recognising what harm looks like from the inside.
+
+## How I read it against the rest of the list
+
+This is the strongest argument I know against treating latent monitoring as a security boundary.
+A probe measures a correlation between activations and behaviour that held on the data it was
+fitted on. An attacker optimising against the probe is optimising exactly that correlation away.
+
+It also fits the pattern of the rest of this list from the defensive side.
+[Concept Cones](https://arxiv.org/abs/2502.17420) shows many directions mediate a behaviour;
+this shows an attacker can pick which of them to route through. If a behaviour can be produced
+from many internal states, a monitor watching one region is watching a small part of the space.
+
+The honest caveats: the strongest attacks need white-box access to embeddings, and hard prompt
+attacks take considerable tuning. Black-box transferability is barely explored, which is what
+would matter for API-served models. Some experiments use small samples. And the
+obfuscation-versus-capability trade-off is demonstrated but not characterised, so there is no
+way yet to say how much capability a given amount of evasion costs.

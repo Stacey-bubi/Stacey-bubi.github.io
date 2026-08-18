@@ -8,27 +8,10 @@ url: https://arxiv.org/abs/2502.17420
 why: "The paper that changed how I think about this. Refusal is not a line, it is a cone, so there are infinitely many directions that work. And it proves the thing I now repeat constantly: two directions can be exactly orthogonal and still interfere with each other."
 question: "Is refusal really mediated by one linear direction, or was that a consequence of how crudely the direction was extracted? And if several directions mediate it, what does it actually mean for them to be separate?"
 contributions:
-  - "<strong>RDO (Refusal Direction Optimisation).</strong> Finds a refusal direction by gradient descent on a weighted sum of three losses: $\\mathcal{L}_{\\text{ablation}}$ (after projecting $r$ out, the model must answer harmful prompts, $\\lambda_{\\text{abl}} = 1.0$), $\\mathcal{L}_{\\text{addition}}$ (after adding $\\alpha r$, it must refuse harmless prompts, $\\lambda_{\\text{add}} = 0.2$), and $\\mathcal{L}_{\\text{retain}}$ (ablating $r$ must not change behaviour on harmless prompts, measured as KL divergence, $\\lambda_{\\text{ret}} = 1.0$). The direction is renormalised at each step."
-  - "<strong>RCO (Refusal Cone Optimisation).</strong> Extends RDO from one vector to an orthonormal basis $B = [b_1, \\dots, b_N]$ defining the cone $\\{\\sum_i \\lambda_i b_i \\mid \\lambda_i \\ge 0\\}$, and requires that every vector sampled inside it mediates refusal. Sampling is uniform over the non-negative part of the unit sphere rather than by convex combination, which would bias samples toward the basis vectors, with Gram-Schmidt re-orthogonalisation after each step."
-  - "<strong>Finds refusal cones of up to five dimensions in every model tested.</strong> This is a stronger statement than 'five directions exist': a cone is a solid region, and every one of the infinitely many vectors inside it triggers refusal when added and disables it when ablated."
-  - "<strong>Defines representational independence.</strong> Two directions are independent if ablating one does not change how strongly the other is expressed in the activations, at any layer. Enforced with an extra loss that penalises exactly that drift, applied over the first 90% of layers — nearer the output the constraint becomes too tight to satisfy."
-  - "<strong>Shows orthogonality is not sufficient for independence.</strong> Ablating a direction strictly orthogonal to another still reduces the second one's expression in later layers, because the activations pass through non-linear attention and MLP layers in between."
-evaluation: "Qwen2.5 (1.5B/3B/7B/14B), Gemma 2 (2B/9B) and Llama-3 8B, all instruct versions with their standard chat templates. Directions fitted on 1,184 training and 128 validation harmful instructions from SaladBench, against 128 harmless training and 128 test instructions from Alpaca. Attack success rate measured on JailbreakBench with the StrongREJECT fine-tuned judge; induced refusal measured on 128 harmless Alpaca prompts by substring heuristic; side effects measured on TruthfulQA. The baseline throughout is difference-in-means (Arditi et al.), with the direction taken at the same layer and $\\alpha$ set to the norm of the difference-in-means direction."
-results:
-  - "RDO matches difference-in-means on directional ablation and beats it on average under activation subtraction, without being optimised for that attack type."
-  - "Less collateral damage: RDO cuts TruthfulQA error by roughly 40% on average relative to difference-in-means. On Qwen2.5-14B, difference-in-means leaves 63.3 and RDO leaves 67.9, against 70.8 for the untouched model."
-  - "Cones of up to five dimensions in all tested models, with the higher-dimensional ones appearing in the wider models — the residual stream is 1536 wide at 1.5B and 5120 at 14B."
-  - "Under the strict independence criterion, at least five independent refusal directions in Gemma-2-2B, each still giving an attack success rate well above a random vector."
-  - "A GCG suffix optimised to suppress one of the independent directions jailbreaks the model 36% of the time."
-notes:
-  - "The cone result is the part worth sitting with. Removing one line from a solid region leaves the region. Any defence that deletes a rank-one subspace is patching one hole in a wall."
-  - "Bigger models hold bigger cones. Scale gives the model more room to spread the behaviour across dimensions, which means this gets worse, not better, as models grow."
-  - "Orthogonality is a fact about two vectors at one point in the network. Between that point and the output sit non-linear layers. Nothing about a right angle at layer 12 constrains what layer 20 does. This is the sentence I would put on a poster."
-  - "The 36% GCG result is what makes representational independence more than a latent curiosity. Input tokens can reach these directions, so the model is genuinely using them — they are not an artefact of the optimisation that found them."
-  - "A more precise direction is also a less destructive one. That is worth noticing: the TruthfulQA damage from abliteration is partly a measure of how badly difference-in-means locates the target, not only of how entangled refusal is."
-limitations:
-  - "Every direction is optimised against the same set of target responses, so the cones found are a lower bound. Other regions of activation space could mediate refusal in ways this objective never looks for."
-  - "The intervention is still orthogonal projection, in a space that is still anisotropic. The paper sharpens <em>what</em> you cut out but not the geometry you cut in. I would want the whole analysis redone under a whitened metric."
+  - "<strong>RDO (Refusal Direction Optimisation).</strong> Finds the direction by gradient descent rather than a formula, on three losses at once: ablating $r$ must let harmful prompts through, adding $\\alpha r$ must cause refusal on harmless ones, and ablating $r$ must <em>not</em> change behaviour on harmless prompts. That third term has no analogue in difference-in-means."
+  - "<strong>RCO (Refusal Cone Optimisation).</strong> Extends RDO from one vector to an orthonormal basis $B = [b_1, \\dots, b_N]$ spanning the cone $\\{\\sum_i \\lambda_i b_i \\mid \\lambda_i \\ge 0\\}$, requiring every vector sampled inside it to mediate refusal."
+  - "<strong>Refusal cones up to five dimensions, in every model tested.</strong> Stronger than 'there are five directions': a cone is a solid region, and all of the infinitely many vectors inside it work."
+  - "<strong>Representational independence.</strong> Two directions count as independent only if ablating one leaves the other's expression unchanged at every layer — strictly stronger than orthogonality, because orthogonal directions demonstrably still interfere."
 pathOrder: 4
 pathNote: "The correction: a cone of directions rather than one, and orthogonal does not mean independent."
 ---
@@ -39,8 +22,8 @@ Difference-in-means reports where two clouds of activations differ on average. I
 notion of what makes a direction good, so a sweep over layers and positions has to pick
 whichever candidate happens to score best after the fact.
 
-RDO defines what good means and optimises for it directly, with three requirements
-applied at once rather than checked afterwards:
+RDO defines what good means and optimises for it directly, with three requirements applied
+at once rather than checked afterwards:
 
 $$
 \mathcal{L} = \lambda_{\text{abl}} \mathcal{L}_{\text{ablation}}
@@ -48,14 +31,20 @@ $$
 + \lambda_{\text{ret}} \mathcal{L}_{\text{retain}}
 $$
 
-with weights $1.0$, $0.2$ and $1.0$. The retain term is the one difference-in-means has no
-analogue for: it explicitly penalises changing behaviour on harmless prompts. That is why
-the resulting direction damages TruthfulQA less.
+with weights $1.0$, $0.2$ and $1.0$, renormalising the direction at each step. The retain
+term is the one difference-in-means has no analogue for: it explicitly penalises changing
+behaviour on harmless prompts.
+
+That shows up in the damage. Ablating the optimised direction costs about 40% less
+TruthfulQA error than ablating the difference-in-means one — on Qwen2.5-14B, 67.9 against
+63.3, with 70.8 for the untouched model. Which is worth noticing in the other direction
+too: some of what we call the cost of abliteration is really a measure of how badly
+difference-in-means locates the target, not of how entangled refusal is.
 
 ## From a direction to a cone
 
-The larger move is optimising a set. Instead of one vector, RCO trains an orthonormal
-basis $B = [b_1, \dots, b_N]$ and studies the region
+The larger move is optimising a set. Instead of one vector, RCO trains an orthonormal basis
+$B = [b_1, \dots, b_N]$ and studies the region
 
 $$
 \Big\{ \textstyle\sum_i \lambda_i b_i \;\Big|\; \lambda_i \ge 0 \Big\}
@@ -64,33 +53,38 @@ $$
 requiring that vectors sampled from inside it all mediate refusal. The sampling detail is
 easy to skip but matters: they sample uniformly over the non-negative part of the unit
 sphere. Sampling convex combinations of the basis vectors instead would concentrate mass
-near the corners and would not test the interior.
+near the corners and never test the interior.
 
-They find such cones up to five dimensions, in every model.
+They find such cones up to five dimensions, in every model — Qwen2.5 at four sizes, Gemma 2
+at two, and Llama-3 8B. The higher-dimensional cones show up in the wider models, where the
+residual stream is 5120 rather than 1536. Scale gives the model more room to spread the
+behaviour out, which means this gets worse as models grow, not better.
+
+The consequence is what I keep coming back to. Removing one line from a solid region leaves
+the region. Any defence that deletes a rank-one subspace is patching one hole in a wall.
 
 ## Orthogonality is not independence
 
-This is the part I keep coming back to.
-
-Find two refusal directions, observe that they are orthogonal, and the natural conclusion
-is that they are separate mechanisms. The paper shows that conclusion does not follow. They
+Find two refusal directions, observe that they are orthogonal, and the natural conclusion is
+that they are separate mechanisms. The paper shows that conclusion does not follow. They
 take a direction strictly orthogonal to the difference-in-means direction, ablate it, and
 watch the other one. In the later layers its expression in the activations drops anyway.
 
 The reason is straightforward once said out loud. Orthogonality is a statement about two
 vectors at a single point in the network. Between that point and the output sit attention
-and MLP layers, which are not linear. A right angle at one layer says nothing about what a
-non-linear function does downstream.
+and MLP layers, which are not linear. A right angle at layer 12 says nothing about what a
+non-linear function does at layer 20.
 
-So they define the stronger property. Two directions $\lambda, \mu$ are
-**representationally independent** if ablating one leaves the cosine similarity of the
-activations with the other unchanged at every layer. Enforcing it costs attack strength —
-the constrained directions are weaker than the unconstrained ones — but at least five
-independent directions survive in Gemma-2-2B, each still well above a random vector.
+So they define the stronger property. Two directions are **representationally independent**
+if ablating one leaves the cosine similarity of the activations with the other unchanged at
+every layer. It is enforced with an extra loss over the first 90% of layers — nearer the
+output the constraint becomes too tight to satisfy.
 
-Then they show these are reachable from the input. A GCG suffix optimised against one of
-them jailbreaks the model 36% of the time. The independent directions are not a latent
-curiosity; the model is using them.
+Enforcing it costs attack strength, but at least five independent directions survive in
+Gemma-2-2B, each still well above a random vector. And they are reachable from the input: a
+GCG suffix optimised against one of them jailbreaks the model 36% of the time. That number
+is what makes representational independence more than a latent curiosity — the model is
+genuinely using these directions, and token-level attacks can get at them.
 
 ## Why this matters beyond refusal
 
@@ -98,12 +92,24 @@ Take the two results together and a lot of defensive work looks shaky.
 
 If a concept occupies a cone rather than a line, removing a rank-one subspace is not
 removing the concept. And if orthogonality does not certify independence, then every method
-that treats orthogonality as evidence of having isolated a concept is proving less than it
+treating orthogonality as evidence of having isolated a concept is proving less than it
 claims.
 
-That second point lands on
-[Safety Subspaces](https://arxiv.org/abs/2505.14185), which measures subspace overlap and
-concludes that safety is not linearly separable from general capability. Its metric treats
-orthogonality as what separation would look like. But by this paper's argument, even a
-perfectly orthogonal result would not have established independence. So the conclusion
-survives and gets stronger: subspace defences fail on two counts rather than one.
+That second point lands on [Safety Subspaces](https://arxiv.org/abs/2505.14185), which
+measures subspace overlap and concludes safety is not linearly separable from general
+capability. Its metric treats orthogonality as what separation would look like. By this
+paper's argument, even a perfectly orthogonal result would not have established
+independence — so the conclusion survives and gets stronger: subspace defences fail on two
+counts rather than one.
+
+## Where I think it is weak
+
+Every direction is optimised against the same set of target responses, so the cones found
+are a lower bound on the mess. Other regions of activation space could mediate refusal in
+ways this objective never looks for.
+
+And the intervention is still orthogonal projection, in a space that is still
+[anisotropic](https://aclanthology.org/D19-1006/). The paper sharpens *what* you cut out
+without touching the geometry you cut in. I would want the whole analysis redone under a
+whitened metric before believing the cone dimensions are the real ones rather than an
+artefact of measuring angles in a distorted space.

@@ -847,9 +847,24 @@ hr {
   margin-top: 1rem;
 }
 
+/* The structured summary at the top of a paper page, above the long note. */
+.paper-fields {
+  max-width: var(--measure);
+  padding: 1.5rem 0 0;
+  border-top: 1px solid var(--border);
+}
+
 .prose {
   max-width: var(--measure);
   padding-bottom: 2rem;
+}
+
+/* The body follows the summary directly, so its first heading needs a rule to
+   mark the handover from the short form to the full note. */
+.prose--paper > h2:first-child {
+  margin-top: 2.75rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--border);
 }
 
 .prose > * + * {

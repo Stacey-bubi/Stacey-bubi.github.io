@@ -6,44 +6,31 @@ venue: Transformer Circuits Thread
 theme: geometry
 url: https://transformer-circuits.pub/2022/toy_model/index.html
 code: https://arxiv.org/abs/2209.10652
-why: "The best explanation of why single neurons respond to unrelated things, and one of the reasons the representation space is crowded and skewed. If features are packed in as nearly-orthogonal directions, then 'orthogonal' stops being a strong statement about anything."
+why: "The best explanation of why single neurons respond to unrelated things, and one reason the representation space is crowded and skewed. If features are packed in as nearly-orthogonal directions, then 'orthogonal' stops being a strong statement about anything."
 question: "Why are neurons polysemantic — why does one neuron fire for several unrelated concepts instead of one? Is that a defect of training, or is the network doing something deliberate?"
 contributions:
-  - "<strong>Names and demonstrates superposition.</strong> A network can store more independent features than it has dimensions, by representing them as directions that are <em>nearly</em> orthogonal rather than exactly orthogonal. It is a compression scheme, and polysemantic neurons are what it looks like from the outside."
-  - "<strong>Gives the condition under which it happens.</strong> Sparsity. If features rarely activate at the same time, the interference between overlapping directions rarely costs anything, so packing them in is worth it."
-  - "<strong>Shows it is a phase transition, not a gradient.</strong> Whether a given feature is stored in superposition or gets a clean dimension of its own flips sharply, depending on how sparse and how important that feature is."
-  - "<strong>Shows the packing has structure.</strong> Features in superposition arrange themselves into regular geometric configurations — digons, triangles, pentagons, tetrahedra — the same solutions that turn up in the Thomson problem and in uniform polytopes."
-  - "<strong>Shows computation can happen in superposition.</strong> The network is not just storing compressed features and decompressing them to work; it performs at least some computation directly on the superposed representation."
-evaluation: "Small ReLU networks trained on synthetic data with a controlled number of input features, a controlled sparsity level, and fewer hidden dimensions than features. The setup is deliberately small enough to understand completely."
-notes:
-  - "The independence argument is the part I find most useful, and it is not about orthogonality at all. Concepts behave independently because they rarely co-occur, not because their vectors are perpendicular. The combinatorial space of sparse activation patterns is enormous — for a 4096-dimensional space with roughly 10 features active at a time, on the order of $10^{26}$ patterns — so collisions almost never happen in practice."
-  - "That reframes what 'the model has millions of features in 4096 dimensions' means. It is not paradoxical, it is what sparsity buys you."
-  - "This is one cause of anisotropy, alongside the training-dynamics and rogue-dimension explanations. They are complementary, not competing."
-  - "The linearity claim is more slippery than it first sounds. The features themselves are wildly non-linear functions of the input — recognising a face from pixels is not linear. What is linear is only the <em>storage</em>: once the network has computed the feature, it writes it as a direction, and multiple active features are stored as a weighted sum $\\sum_i x_i W_i$."
-limitations:
-  - "The definition of linear representation depends on what you count as a feature, and the paper says so. If you pick the wrong basis of concepts you see no linearity at all."
-  - "That makes the hypothesis nearly unfalsifiable in practice. Fail to find a linear direction for something and you can always say the feature was defined wrongly. It is a useful abstraction, not a demonstrated fact, and I think it should be described that way more often than it is."
-  - "Toy models on synthetic data. The extrapolation to real language models is an argument, not a measurement."
+  - "<strong>Names and demonstrates superposition.</strong> A network stores more independent features than it has dimensions by representing them as <em>nearly</em> orthogonal directions. It is a compression scheme, and polysemantic neurons are what it looks like from outside."
+  - "<strong>Gives the condition:</strong> sparsity. If features rarely fire together, the interference between overlapping directions rarely costs anything, so packing them in pays."
+  - "<strong>It is a phase transition, not a gradient.</strong> Whether a feature gets a clean dimension of its own or goes into superposition flips sharply with its sparsity and importance."
+  - "<strong>The packing is structured</strong> — digons, triangles, pentagons, tetrahedra, the same solutions that appear in the Thomson problem — and at least some computation happens directly on the superposed representation, without decompressing first."
 ---
 
 ## What superposition is
 
-Give a network more features to represent than it has dimensions and it does not simply
-drop the extra ones. It stores them anyway, as directions that are close to orthogonal but
-not exactly orthogonal. Any two features overlap slightly, which produces interference when
-both are active at once.
+Give a network more features to represent than it has dimensions and it does not drop the
+extra ones. It stores them anyway, as directions that are close to orthogonal but not
+exactly orthogonal. Any two features overlap slightly, which produces interference when both
+are active at once.
 
 The trade is worth it when features are sparse. If two features almost never fire together,
 their interference almost never gets paid. So the network packs in far more features than
-dimensions, and pays a small expected cost.
+dimensions and pays a small expected cost.
 
 A neuron in that arrangement has no single meaning. It sits at the intersection of several
 feature directions and fires for all of them. That is polysemanticity — not sloppiness, but
-what an efficient compression scheme looks like from the outside.
-
-The paper also finds both kinds of neuron coexisting in the same model: some clean and
-monosemantic, others thoroughly polysemantic, depending on the sparsity and importance of
-what they encode.
+what an efficient compression scheme looks like from outside. Both kinds of neuron coexist
+in the same model: some clean and monosemantic, others thoroughly polysemantic, depending on
+the sparsity and importance of what they encode.
 
 ## Why sparsity gives independence without orthogonality
 
@@ -58,11 +45,28 @@ So features behave independently *in practice* even though they are not perpendi
 there are far more of them than there are dimensions. Independence here comes from
 co-occurrence statistics, not from geometry.
 
-That is worth holding next to
-[Concept Cones](https://arxiv.org/abs/2502.17420), which shows orthogonality does not
-imply independence under intervention. Between the two, orthogonality turns out to be
-neither necessary nor sufficient for the property people actually want. It is a
-surprisingly weak tool to be resting so much interpretability work on.
+That reframes what "millions of features in 4096 dimensions" means. It is not paradoxical,
+it is what sparsity buys you.
+
+It is also worth holding next to [Concept Cones](https://arxiv.org/abs/2502.17420), which
+shows orthogonality does not imply independence under intervention. Between the two,
+orthogonality turns out to be neither necessary nor sufficient for the property people
+actually want — a surprisingly weak tool to be resting so much interpretability work on.
+
+Superposition is also one of the causes of
+[anisotropy](https://aclanthology.org/D19-1006/), alongside the training-dynamics and
+rogue-dimension explanations. They are complementary, not competing.
+
+## What is actually linear here
+
+The linearity claim is more slippery than it first sounds.
+
+The features themselves are wildly non-linear functions of the input — recognising a face
+from pixels is not linear. What is linear is only the **storage**: once the network has
+computed a feature, it writes it as a direction, and multiple active features are stored as
+a weighted sum $\sum_i x_i W_i$.
+
+Non-linear feature, linear storage. Those get conflated constantly.
 
 ## The honest weakness
 
@@ -74,7 +78,10 @@ That is a real problem. If no linear direction is found for some concept, one ca
 respond that the concept was carved up wrongly and try a different decomposition. The
 hypothesis is very hard to falsify.
 
-I do not think this makes it useless — it is clearly a productive frame, and most of this
+I do not think that makes it useless — it is clearly a productive frame, and most of this
 list depends on it. But it deserves to be described as a useful abstraction rather than an
-established fact, and papers built on top of it tend to state it far more confidently than
-this one does.
+established fact, and the papers built on top of it tend to state it far more confidently
+than this one does.
+
+Worth remembering too that these are toy models on synthetic data. The extrapolation to real
+language models is an argument, not a measurement.

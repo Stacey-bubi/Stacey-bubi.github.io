@@ -7,21 +7,12 @@ theme: geometry
 url: https://arxiv.org/abs/2505.14185
 code: https://github.com/CERT-Lab/safety-subspaces
 why: "The pessimistic conclusion the rest of this list has been circling. If safety does not occupy its own linear subspace, then every defence built on isolating one is working on a target that is not there."
-question: "Why does fine-tuning on completely harmless data so often break alignment? Can you isolate a 'safety' subspace at all, or is safety tangled up with the model's general capability? Do the parameters responsible for safety overlap with the ones responsible for performance?"
+question: "Why does fine-tuning on completely harmless data so often break alignment? Can you isolate a 'safety' subspace at all, or is safety tangled up with the model's general capability?"
 contributions:
-  - "<strong>Tests linear separability of safety directly, in both weight space and activation space.</strong> Not by assuming it and building a defence, but by measuring whether the separation exists."
-  - "<strong>Uses maximum subspace overlap (MSO) as the measure.</strong> $\\text{MSO} = \\lVert Q_1^\\top Q_2 \\rVert_F^2 / \\min(k_1, k_2)$ — the average squared cosine between the principal components of two matrices, from the SVD of each. Above the random baseline means the subspaces are not orthogonal."
-  - "<strong>Finds the overlap goes the wrong way.</strong> MSO between harmful and useful weight updates is <em>higher</em> than between harmful and alignment updates. Learning something harmful is geometrically closer to learning something useful than it is to safety."
-  - "<strong>Shows the projection experiments fail as predicted.</strong> Any surgical projection that removes harmful directions removes utility along with them. There is no cut that separates the two."
-  - "<strong>Extends the result to activations.</strong> Prompts with opposite safety implications activate overlapping representations, so this is not only a fact about weight updates."
-notes:
-  - "This is the strongest available argument against a whole family of defences. SafeLoRA and its relatives assume there is a safety subspace to protect or restore. If the subspace is not distinct, the method is protecting a region that also contains the model's usefulness."
-  - "It also explains the fine-tuning-breaks-alignment result cleanly. Harmless fine-tuning damages safety not because of anything adversarial in the data, but because the directions it moves are the directions safety lives in."
-  - "There is a nice tension with <a href='https://arxiv.org/abs/2502.17420'>Concept Cones</a> worth spelling out. MSO uses orthogonality as the criterion for separability — high overlap means not separable. But Concept Cones shows orthogonality would not have implied independence anyway, because non-linear layers mix directions regardless. So even a result of $\\text{MSO} = 0$ would not have saved subspace defences. The critique does not weaken this paper's conclusion, it doubles it: subspace defences fail on two independent grounds at once."
-limitations:
-  - "Only the linear case is tested. Non-linear disentanglement, activation patching and causal independence are all left open. The paper shows safety is not <em>linearly</em> distinct, which is not the same as showing it is not distinct."
-  - "MSO is a geometric overlap measure, not a causal one. High overlap between two subspaces is strong evidence they cannot be cut apart linearly, but it does not by itself establish what is causally responsible for behaviour."
-  - "It is a fine-tuning case study. How far it generalises beyond that setting is not settled here."
+  - "<strong>Tests whether safety is linearly separable at all</strong>, in both weight space and activation space — rather than assuming it and building a defence on top."
+  - "<strong>Measures it with maximum subspace overlap (MSO):</strong> the average squared cosine between the principal components of two updates, taken from the SVD of each. Above the random baseline means the subspaces are not orthogonal."
+  - "<strong>The overlap goes the wrong way.</strong> MSO between harmful and <em>useful</em> weight updates is higher than between harmful and alignment updates. Learning something harmful is geometrically closer to learning something useful than it is to safety."
+  - "<strong>Projections fail exactly as that predicts.</strong> Any surgical cut removing harmful directions takes utility with it, and the result holds in activations too: prompts with opposite safety implications activate overlapping representations."
 pathOrder: 5
 pathNote: "The pessimistic end of the argument: safety may not have its own subspace at all, so there is nothing clean to cut."
 ---
@@ -36,9 +27,9 @@ $$
 \text{MSO} = \frac{\lVert Q_1^\top Q_2 \rVert_F^2}{\min(k_1, k_2)}
 $$
 
-which is the average squared cosine between the two sets of principal directions. Zero
-means orthogonal subspaces. Anything meaningfully above the random baseline means the two
-updates are moving the model along shared directions.
+the average squared cosine between the two sets of principal directions. Zero means
+orthogonal subspaces. Anything meaningfully above the random baseline means the two updates
+move the model along shared directions.
 
 They compute this between three kinds of update: $\Delta^{\text{Harmful}}$ (fine-tuning on
 harmful data), $\Delta^{\text{Useful}}$ (fine-tuning on ordinary capability data), and
@@ -49,34 +40,51 @@ $\Delta^{\text{Alignment}}$ (safety training).
 The overlap between harmful and useful updates is **higher** than between harmful and
 alignment updates.
 
-Read that again in terms of what it implies. If you wanted to build a defence that watches
-for weight updates pointing in "harmful" directions, the updates it would flag look more
-like ordinary capability learning than like the safety training they are supposed to be
-undoing. There is no direction to watch that does not also catch the model getting better
-at its job.
+Read that again in terms of what it implies. If you wanted a defence that watches for weight
+updates pointing in "harmful" directions, the updates it would flag look more like ordinary
+capability learning than like the safety training they are supposed to be undoing. There is
+no direction to watch that does not also catch the model getting better at its job.
 
-The projection experiments confirm it behaviourally. Cut along the directions that carry
+The projection experiments confirm it behaviourally. Cut along the directions carrying
 harmful behaviour and utility comes away with it, every time.
 
 ## Why fine-tuning on harmless data breaks alignment
 
-This gives the mechanism for a result that had been reported but not really explained. It
+This gives the mechanism for a result that had been reported but never really explained. It
 is not that harmless datasets secretly contain harmful content, and it is not adversarial.
 It is that the directions ordinary fine-tuning moves are the same directions safety
 occupies. Damage to alignment is a side effect of learning anything at all.
+
+That also makes this the strongest available argument against a whole family of defences.
+SafeLoRA and its relatives assume there is a safety subspace to protect or restore. If the
+subspace is not distinct, the method is protecting a region that also contains the model's
+usefulness.
 
 ## The tension with Concept Cones, and why it strengthens the case
 
 Worth being precise about, because it looks at first like a problem for this paper.
 
-MSO treats orthogonality as the standard for separability. Low overlap would have meant
+MSO treats orthogonality as the standard for separability — low overlap would have meant
 separable subspaces. But [Concept Cones](https://arxiv.org/abs/2502.17420) shows
-orthogonality does not imply independence under intervention — ablate one direction and an
+orthogonality does not imply independence under intervention: ablate one direction and an
 exactly orthogonal one still weakens downstream, because non-linear layers sit in between.
 
-So this paper's criterion is, if anything, too generous. It looked for orthogonality,
-failed to find it, and concluded the subspaces are entangled. Had it found orthogonality,
-that still would not have established independence.
+So this paper's criterion is, if anything, too generous. It looked for orthogonality, failed
+to find it, and concluded the subspaces are entangled. Had it found orthogonality, that
+still would not have established independence.
 
-Both failure modes are real and they are independent of each other. Subspace-based
-defences have to clear two bars, and this line of work says they clear neither.
+Both failure modes are real and independent of each other. Subspace-based defences have to
+clear two bars, and this line of work says they clear neither.
+
+## Where I think it is weak
+
+Only the **linear** case is tested. Non-linear disentanglement, activation patching and
+causal independence are all left open. The paper shows safety is not *linearly* distinct,
+which is not the same as showing it is not distinct.
+
+MSO is also a geometric overlap measure rather than a causal one. High overlap is strong
+evidence two subspaces cannot be cut apart linearly, but it does not by itself establish
+what is causally responsible for behaviour.
+
+And it is a fine-tuning case study. How far the conclusion generalises beyond that setting
+is not settled here.

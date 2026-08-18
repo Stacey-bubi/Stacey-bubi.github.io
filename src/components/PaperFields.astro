@@ -1,0 +1,25 @@
+---
+import type { CollectionEntry } from 'astro:content'
+import { inlineMath } from '../utils/math'
+
+interface Props {
+  data: CollectionEntry<'papers'>['data']
+}
+
+const { data: p } = Astro.props
+const m = inlineMath
+---
+
+<div class="fields">
+  <div class="field">
+    <h4>The question</h4>
+    <p set:html={m(p.question)} />
+  </div>
+
+  <div class="field">
+    <h4>What the paper contributes</h4>
+    <ul>
+      {p.contributions.map((item) => <li set:html={m(item)} />)}
+    </ul>
+  </div>
+</div>

@@ -4,6 +4,7 @@ import { THEMES } from '../data/themes'
 import { href } from '../utils/url'
 import { searchText } from '../utils/search'
 import { inlineMath } from '../utils/math'
+import PaperFields from './PaperFields.astro'
 
 interface Props {
   entry: CollectionEntry<'papers'>
@@ -13,17 +14,6 @@ interface Props {
 const { entry, hasNote } = Astro.props
 const p = entry.data
 const theme = THEMES[p.theme]
-
-/** Every card field may carry inline maths and a little inline HTML. */
-const m = inlineMath
-
-/** Question, then what it claims, then how it was checked, then what I think. */
-const before = [{ label: 'What the paper contributes', items: p.contributions }]
-const after = [
-  { label: 'Headline results', items: p.results },
-  { label: 'My notes', items: p.notes },
-  { label: 'Limitations', items: p.limitations }
-].filter((f) => f.items.length > 0)
 ---
 
 <article
@@ -31,7 +21,7 @@ const after = [
   id={entry.id}
   data-theme-key={p.theme}
   data-year={p.year}
-  data-text={searchText(p)}
+  data-text={searchText(p, entry.body)}
   style={`--h:${theme.hue}`}
 >
   <h3 class="card__title">
@@ -73,53 +63,13 @@ const after = [
 
   <p class="why">
     <b>Why it is here</b>
-    <Fragment set:html={m(p.why)} />
+    <Fragment set:html={inlineMath(p.why)} />
   </p>
 
   <details class="card__more">
-    <summary>The question, the contribution, my notes</summary>
+    <summary>The question and what it contributes</summary>
 
-    <div class="fields">
-      <div class="field">
-        <h4>The question</h4>
-        <p set:html={m(p.question)} />
-      </div>
-
-      {
-        before.map((f) => (
-          <div class="field">
-            <h4>{f.label}</h4>
-            <ul>
-              {f.items.map((item) => (
-                <li set:html={m(item)} />
-              ))}
-            </ul>
-          </div>
-        ))
-      }
-
-      {
-        p.evaluation && (
-          <div class="field">
-            <h4>How it was tested</h4>
-            <p set:html={m(p.evaluation)} />
-          </div>
-        )
-      }
-
-      {
-        after.map((f) => (
-          <div class="field">
-            <h4>{f.label}</h4>
-            <ul>
-              {f.items.map((item) => (
-                <li set:html={m(item)} />
-              ))}
-            </ul>
-          </div>
-        ))
-      }
-    </div>
+    <PaperFields data={p} />
 
     {
       hasNote && (

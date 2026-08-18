@@ -7,27 +7,12 @@ theme: geometry
 url: https://arxiv.org/abs/2311.03658
 code: https://github.com/KihoPark/linear_rep_geometry
 why: "Everyone says concepts are directions, but three different things are meant by that and people mix them up constantly. This paper proves the three are the same thing, and then gives the correct way to measure inside a space that is not Euclidean."
-question: "What does 'linear representation' actually mean? There are at least three incompatible readings — a subspace, something a linear probe can read, and something you can steer with. Which is right, and how do they relate? And once you have a representation space, how are you supposed to measure inside it? Do cosine similarity and orthogonal projection mean anything there?"
+question: "What does 'linear representation' actually mean? There are at least three incompatible readings — a subspace, something a linear probe can read, and something you can steer with. Which is right, and how do they relate? And once you have a representation space, how are you supposed to measure inside it?"
 contributions:
-  - "<strong>Formalises a linear concept via counterfactual pairs.</strong> A concept direction $\\bar{\\gamma}_W$ is the averaged difference between counterfactual word pairs — queen minus king, woman minus man — and this definition is precise enough to prove things with."
-  - "<strong>Proves the three readings coincide.</strong> Subspace membership, linear probing and steering turn out to be the same underlying object, so the probe direction and the steering vector are built from the same thing rather than being separate artefacts."
-  - "<strong>Separates the two spaces.</strong> There is the embedding space $\\Lambda$ (dynamic activations flowing through the model) and the unembedding space $\\Gamma$ (the fixed vocabulary vectors in the output matrix). A concept can be represented in either, and they do not share a coordinate system. Confusing them is a common source of error."
-  - "<strong>Introduces the causal inner product.</strong> $\\langle \\bar{\\gamma}, \\bar{\\gamma}' \\rangle_C = \\bar{\\gamma}^\\top \\text{Cov}(\\gamma)^{-1} \\bar{\\gamma}'$ — a non-Euclidean inner product, equivalent to whitening by the covariance of the vocabulary vectors, under which causally independent concepts are orthogonal."
-  - "<strong>Derives the steering vector from the concept direction.</strong> Through the Riesz isomorphism, the intervention vector is $\\bar{\\lambda}_W = \\text{Cov}(\\gamma)^{-1}\\bar{\\gamma}_W$. A direction found in the vocabulary matrix becomes a usable steering vector by correcting for the model's own word statistics."
-evaluation: "27 concepts: 22 from BATS 3.0, 4 language pairs, plus a frequent/infrequent split. Counterfactual pairs restricted to single-token words, with contexts drawn from Wikipedia. Main model LLaMA-2-7B (32K vocabulary, 4096 dimensions), compared against Gemma-2B. The comparison throughout is Euclidean inner product versus the proposed causal inner product."
-results:
-  - "On LLaMA-2 the Euclidean inner product works unexpectedly well, close to the causal one. On Gemma-2B it does not, and the causal inner product is clearly better."
-  - "That split is the useful finding: whether you can get away with Euclidean geometry depends on the model, and you cannot tell which case you are in without checking."
-notes:
-  - "The core idea is what I keep coming back to. The model is only trained to produce correct output probabilities, so nothing in training forces its internal space to be geometrically well behaved. It can be stretched or rotated arbitrarily without hurting the loss. This is the unidentifiability problem, and it is why a straight ruler gives wrong answers on a curved surface."
-  - "Three concrete ways Euclidean tools mislead here: unrelated concepts can look aligned because the space is squashed in that region; a concept can be spread along a direction that Euclidean distance under-weights; and the static vocabulary space and the dynamic activation space may not share coordinates at all."
-  - "The fix is the same shape as LEACE's. Whiten by the inverse covariance, do the geometry there, come back. Two papers from different subfields arriving at the same correction is a reasonable sign it is the right one."
-  - "That the Euclidean product nearly works on LLaMA-2 but not on Gemma is worth taking seriously before assuming any published cosine-similarity result transfers between models."
-limitations:
-  - "Assumption 3.3 is about a uniformly sampled vocabulary, not about real text. In actual usage, causally independent concepts are often correlated, and that is where the guarantee is weakest."
-  - "The invariant inner product is not identified uniquely — there are $d$ free parameters and the choice $D = I$ is made for convenience, not derived."
-  - "Narrow empirically: 27 concepts, all single-token, one main model."
-  - "It works in the input and output spaces only. The intermediate layers — where steering and abliteration actually operate — are not covered, which is a real gap for anyone wanting to apply this to refusal directions."
+  - "<strong>Proves the three readings coincide.</strong> Subspace membership, what a linear probe reads, and what steering moves turn out to be the same object — so the probe direction and the steering vector come from the same place rather than being separate artefacts."
+  - "<strong>Separates the two spaces.</strong> The embedding space $\\Lambda$ holds the dynamic activations; the unembedding space $\\Gamma$ holds the fixed vocabulary vectors. A concept can live in either, and they do not share a coordinate system."
+  - "<strong>The causal inner product:</strong> $\\langle \\bar{\\gamma}, \\bar{\\gamma}' \\rangle_C = \\bar{\\gamma}^\\top \\text{Cov}(\\gamma)^{-1} \\bar{\\gamma}'$ — whitening by the covariance of the vocabulary vectors, under which causally independent concepts really are orthogonal. This is the answer to 'what is the right ruler'."
+  - "<strong>Derives the steering vector from the concept direction:</strong> $\\bar{\\lambda}_W = \\text{Cov}(\\gamma)^{-1}\\bar{\\gamma}_W$, which moves the target concept while leaving causally independent ones alone."
 pathOrder: 2
 pathNote: "What a linear concept formally is, and the right inner product to use once you accept the space is not Euclidean."
 ---
@@ -40,8 +25,8 @@ things.
 **The unembedding space $\Gamma$** holds the fixed vocabulary vectors in the output
 matrix — the model's static dictionary of what each token means to it.
 
-**The embedding space $\Lambda$** holds the dynamic activations that flow through the
-layers as a specific prompt is processed.
+**The embedding space $\Lambda$** holds the dynamic activations flowing through the layers
+as a specific prompt is processed.
 
 A concept can be linearly represented in either. They are related but they do not share a
 coordinate system, and treating a direction found in one as directly usable in the other is
@@ -53,21 +38,23 @@ vector and the concept direction taken from the vocabulary matrix. This is why l
 probing works at all: the model itself is performing a linear measurement of how well its
 current state aligns with fixed directions in its dictionary.
 
+The concept direction $\bar{\gamma}_W$ is defined from counterfactual pairs — queen minus
+king, woman minus man — averaged. That definition is precise enough to prove things with,
+which is what the rest of the paper does.
+
 ## The broken ruler
 
 Here is the problem the paper is really about.
 
-The model is trained only to produce correct output probabilities through a softmax.
-Nothing in that objective constrains the geometry of the internal space. It can be
-stretched along some axes and squashed along others with no effect on the loss. This is
+The model is trained only to produce correct output probabilities through a softmax. Nothing
+in that objective constrains the geometry of the internal space. It can be stretched along
+some axes and squashed along others with no effect on the loss. This is
 **unidentifiability**, and it means Euclidean tools are not trustworthy by default:
 
-1. **Geometric distortion.** Nothing rewards keeping unrelated concepts orthogonal, so two
-   concepts can appear aligned purely because the space is compressed in that region.
-2. **Metric arbitrariness.** A concept may live along a direction whose scale plain
-   Euclidean distance gets wrong.
-3. **Space mismatch.** The static dictionary and the dynamic activations may follow
-   different coordinate systems entirely.
+Nothing rewards keeping unrelated concepts orthogonal, so two concepts can appear aligned
+purely because the space is compressed in that region. A concept may live along a direction
+whose scale plain Euclidean distance gets wrong. And the static dictionary and the dynamic
+activations may follow different coordinate systems entirely.
 
 Applying a straight ruler to a stretched space gives confident, wrong answers about how
 concepts relate.
@@ -92,9 +79,15 @@ $$
 $$
 
 Lemma 2.4 gives the property that makes this a steering vector rather than a blunt
-instrument: $\bar{\lambda}_W^\top \bar{\gamma}_Z = 0$ for every causally independent
-concept $Z$, while $\bar{\lambda}_W^\top \bar{\gamma}_W > 0$. It moves the concept you
-targeted and leaves the independent ones alone.
+instrument: $\bar{\lambda}_W^\top \bar{\gamma}_Z = 0$ for every causally independent concept
+$Z$, while $\bar{\lambda}_W^\top \bar{\gamma}_W > 0$. It moves what you targeted and leaves
+the independent ones alone.
+
+Tested across 27 concepts on LLaMA-2-7B and Gemma-2B, with one result worth carrying: on
+LLaMA-2 the plain Euclidean inner product works unexpectedly well, close to the causal one.
+On Gemma-2B it does not. Whether you can get away with Euclidean geometry depends on the
+model, and you cannot tell which case you are in without checking — which is worth
+remembering before assuming any published cosine-similarity result transfers between models.
 
 ## Why this sits next to LEACE
 
@@ -104,9 +97,20 @@ and calls the result the correct inner product.
 
 Different subfields, different notation, same correction: the raw space is distorted, so
 undo the distortion before doing geometry in it. Both are responses to the anisotropy
-[Ethayarajh measured in 2019](https://aclanthology.org/D19-1006/).
+[Ethayarajh measured in 2019](https://aclanthology.org/D19-1006/). Two papers converging on
+the same fix from unrelated directions is a decent sign it is the right one.
 
-The gap I care about is that this paper works in the input and output spaces. Refusal
-directions and steering vectors live in the intermediate layers, which are not covered
-here. Nobody has yet redone the abliteration analysis under a properly chosen inner
+## Where I think it is weak
+
+The key assumption is about a **uniformly sampled vocabulary**, not about real text. In
+actual usage, causally independent concepts are often correlated, and that is exactly where
+the guarantee is weakest.
+
+The inner product is also not uniquely identified — $d$ free parameters remain, and the
+specific choice is made for convenience rather than derived. The empirical work is narrow
+too: 27 concepts, all single-token, one main model.
+
+The gap I care about most is that this works in the **input and output spaces only**.
+Refusal directions and steering vectors live in the intermediate layers, which are not
+covered here. Nobody has yet redone the abliteration analysis under a properly chosen inner
 product, and I would like to see it.

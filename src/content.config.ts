@@ -34,15 +34,15 @@ const papers = defineCollection({
 
     question: z.string(),
 
-    /** What this paper contributes, in its own right. Not the baseline it beats. */
+    /**
+     * The only bulleted list on the site, and deliberately so. What this paper
+     * contributes in its own right — never the baseline it beats.
+     *
+     * Everything else (datasets, metrics, baselines, headline numbers, my notes,
+     * limitations) belongs in the MDX body as prose. Bulleted lists of those made
+     * the page heavy and repeated what the body already said.
+     */
     contributions: z.array(z.string()).min(1),
-    /** Models, datasets, metrics and baselines, in one dense paragraph. */
-    evaluation: z.string().optional(),
-    /** Headline numbers worth remembering. */
-    results: z.array(z.string()).default([]),
-
-    notes: z.array(z.string()).default([]),
-    limitations: z.array(z.string()).default([]),
 
     /** Position in the "start here" reading path. Absent = not in the path. */
     pathOrder: z.number().int().positive().optional(),

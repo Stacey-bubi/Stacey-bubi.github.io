@@ -8,24 +8,9 @@ url: https://aclanthology.org/2024.findings-eacl.58/
 why: "The follow-up to Ethayarajh for modern decoders. It says where in the network the distortion is worst, which matters directly if you are choosing a layer to intervene at."
 question: "How do anisotropy and intrinsic dimension differ between encoder and decoder transformers, how do they change across layers, and how do they change over the course of training?"
 contributions:
-  - "<strong>Measures anisotropy as a spectral quantity.</strong> On the centred embedding matrix, $\\text{anisotropy}(X) = \\sigma_1^2 / \\sum_i \\sigma_i^2$ — the share of total variance taken by the first singular direction. Cross-checked against average pairwise cosine similarity."
-  - "<strong>Measures intrinsic dimension with the Facco et al. (2018) estimator</strong>, which uses the ratio of distances to the first two nearest neighbours and fits a line to estimate dimension. Verified against manifold-adaptive estimation and the method of moments."
-  - "<strong>Finds encoders and decoders differ in shape.</strong> Encoders are roughly uniformly anisotropic across layers. Decoders show a bell-shaped profile, with anisotropy peaking in the middle layers."
-  - "<strong>Tracks anisotropy through training.</strong> In decoders it rises steadily and then plateaus, so the narrow cone is something training builds rather than an initialisation artefact."
-  - "<strong>Finds two phases in intrinsic dimension.</strong> It rises sharply early in training, as representations spread into more dimensions, then falls, as they are compressed into something more compact."
-evaluation: "Encoders: BERT, RoBERTa, ALBERT. Decoders: OPT (125M to 13B), Llama-2 (7B, 13B, 7B-Chat), GPT-2, GPT-J, Falcon (7B and 7B-Instruct), Bloom (560M to 7B), Pythia-2.8B, TinyLlama-1.1B."
-results:
-  - "The decoder bell curve is the practical finding: middle layers are the most anisotropic part of a decoder, not the last layers."
-  - "The two-phase intrinsic dimension pattern — expand, then compress — appears consistently across the models tracked through training."
-notes:
-  - "This is the paper that makes anisotropy actionable rather than just true. Ethayarajh established the phenomenon in 2019 on small models; this says where it is worst in the decoders people actually intervene on today."
-  - "The middle-layer peak is directly relevant to abliteration. Refusal directions are usually taken from the middle of the network, which is exactly where this says the space is most distorted — so it is where orthogonal projection should be least trustworthy."
-  - "The expand-then-compress training curve is a nice echo of the information-bottleneck picture, arrived at from geometry rather than information theory."
-  - "$\\sigma_1^2 / \\sum \\sigma_i^2$ is a cheap enough measurement that there is no excuse for not reporting it alongside any intervention result. If you are projecting in a space, say how distorted the space was."
-limitations:
-  - "Descriptive. It measures the geometry and does not connect it to any downstream task or intervention outcome, so the practical cost of the distortion is still not quantified anywhere."
-  - "Intrinsic dimension estimators disagree with each other in high dimensions and on limited samples. Using three of them helps, but absolute values should be read as indicative rather than exact."
-  - "Anisotropy defined as the first singular value's share is one choice among several. It captures a single dominant direction well and is less informative when several rogue dimensions share the load."
+  - "<strong>Encoders and decoders have different shapes.</strong> Encoders are roughly uniformly anisotropic across layers; decoders show a bell-shaped profile, with anisotropy peaking in the <em>middle</em> layers."
+  - "<strong>Anisotropy is built during training.</strong> In decoders it rises steadily and then plateaus, so the narrow cone is something training produces rather than an initialisation artefact."
+  - "<strong>Intrinsic dimension moves in two phases:</strong> it rises sharply early, as representations spread into more dimensions, then falls, as they are compressed into something more compact."
 ---
 
 ## Two measurements
@@ -37,39 +22,60 @@ $$
 \text{anisotropy}(X) = \frac{\sigma_1^2}{\sum_i \sigma_i^2}
 $$
 
-the fraction of total variance carried by the single largest direction. A value near zero
-means variance is spread evenly, which is what an isotropic space looks like. A large value
-means one direction dominates everything.
+the fraction of total variance carried by the single largest direction. Near zero means variance
+is spread evenly, which is what an isotropic space looks like. Large means one direction
+dominates. They cross-check it against average pairwise cosine similarity.
 
-**Intrinsic dimension** asks how many dimensions the data actually occupies, regardless of
-how many it is stored in. The estimator used works from how the volume of a sphere scales:
-for each point, take the distances to its first and second nearest neighbours, and fit the
-distribution of their ratio.
+**Intrinsic dimension** asks how many dimensions the data actually occupies, regardless of how
+many it is stored in. The estimator works from how sphere volume scales: for each point, take
+the distances to its first and second nearest neighbours and fit the distribution of their
+ratio. Two further estimators are used to verify.
+
+The models are a wide sweep — BERT, RoBERTa and ALBERT on the encoder side; OPT, Llama-2, GPT-2,
+GPT-J, Falcon, Bloom, Pythia and TinyLlama on the decoder side.
 
 ## Where the distortion lives
 
 The result I use is the encoder/decoder split.
 
-Encoders are fairly evenly anisotropic through their depth. Decoders are not: their
-anisotropy profile is bell-shaped, peaking in the middle layers.
+Encoders are fairly evenly anisotropic through their depth. Decoders are not: their anisotropy
+profile is bell-shaped, peaking in the middle layers.
 
 That is worth putting next to how refusal directions are extracted.
-[Arditi et al.](https://arxiv.org/abs/2406.11717) sweep layers and exclude the last 20% of
-the network, so the chosen direction typically comes from the middle. According to this
-paper, the middle is the most geometrically distorted part of a decoder.
+[Arditi et al.](https://arxiv.org/abs/2406.11717) sweep layers and exclude the last 20% of the
+network, so the chosen direction typically comes from the middle. According to this paper, the
+middle is the most geometrically distorted part of a decoder.
 
-So the standard abliteration recipe picks its direction from the region where orthogonal
-projection is least justified. That does not make the attack wrong — it plainly works — but
-it is a plausible source of the collateral damage, and it suggests the
-[whitening correction](https://arxiv.org/abs/2306.03819) would matter most exactly where
-these methods operate.
+So the standard abliteration recipe picks its direction from exactly the region where orthogonal
+projection is least justified. That does not make the attack wrong — it plainly works — but it is
+a plausible source of the collateral damage, and it suggests the
+[whitening correction](https://arxiv.org/abs/2306.03819) would matter most precisely where these
+methods operate.
+
+This is also the paper that makes anisotropy actionable rather than merely true.
+[Ethayarajh](https://aclanthology.org/D19-1006/) established the phenomenon in 2019 on small
+models; this says where it is worst in the decoders people actually intervene on today. And
+$\sigma_1^2 / \sum \sigma_i^2$ is cheap enough that there is no excuse for not reporting it
+alongside an intervention result. If you are projecting in a space, say how distorted the space
+was.
 
 ## The training dynamics
 
-Anisotropy in decoders grows through training and then levels off. The narrow cone is
-something the model builds, not something it starts with.
+Anisotropy in decoders grows through training and then levels off. The narrow cone is something
+the model builds, not something it starts with.
 
-Intrinsic dimension moves in two phases: up first, as the model spreads information into
-more dimensions, then down, as it compresses into more compact representations. The final
-model is not the most dimensionally spread version of itself — it passed through that on
-the way.
+Intrinsic dimension moves in two phases: up first, as the model spreads information into more
+dimensions, then down, as it compresses into more compact representations. The final model is not
+the most dimensionally spread version of itself — it passed through that on the way. A nice echo
+of the information-bottleneck picture, arrived at from geometry rather than information theory.
+
+## Its limits
+
+It is descriptive. It measures the geometry and does not connect it to any downstream task or
+intervention outcome, so the practical cost of the distortion is still unquantified anywhere in
+this literature.
+
+Intrinsic dimension estimators also disagree with each other in high dimensions and on limited
+samples; using three of them helps, but the absolute values should be read as indicative rather
+than exact. And defining anisotropy as the first singular value's share captures a single
+dominant direction well while saying less when several rogue dimensions share the load.

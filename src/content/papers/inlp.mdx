@@ -7,22 +7,11 @@ theme: erasure
 url: https://aclanthology.org/2020.acl-main.647/
 code: https://github.com/shauli-ravfogel/nullspace_projection
 why: "The original surgical-removal method, and the baseline LEACE was written to beat. Worth reading to see what the naive version costs: it works, and it takes 360 dimensions of the representation with it."
-question: "How do you remove a protected attribute — gender, race — from a learned representation so that it can no longer be recovered, without retraining the model?"
+question: "How do you remove a protected attribute — gender, race — from a learned representation so it can no longer be recovered, without retraining the model?"
 contributions:
-  - "<strong>Iterative Nullspace Projection (INLP).</strong> Train a linear classifier to predict the attribute from the representation, project the representation onto that classifier's nullspace so the classifier can no longer work, then repeat. Each round removes one more linearly decodable direction."
-  - "<strong>Makes the representation linearly guarded.</strong> After enough iterations no linear classifier separates the data by the attribute, which was the first practical version of this guarantee."
-  - "<strong>Post-hoc and cheap.</strong> No retraining, no access to the original objective. It operates on frozen representations."
-  - "<strong>Applies it to fairness.</strong> Demonstrated on bias in word embeddings and on improving fairness in multi-class classification."
-notes:
-  - "The mechanism is the weakness. Each iteration deletes a whole direction from the representation, and iterations are needed because one is never enough. About 20 rounds is typical, and by the end 360 dimensions have been destroyed — a number reported by the <a href='https://arxiv.org/abs/2306.03819'>LEACE</a> authors when comparing against it. LEACE achieves the same guarantee at a cost of 17."
-  - "Deleting dimensions is the crude version of the same thing abliteration does. Both project orthogonally, and both take unrelated information with the target because they do not correct for the shape of the space first."
-  - "The 20-iterations detail is the same phenomenon as LEACE's rediscovery result, seen from a different angle: linear information about a concept is not stored in one direction, so removing one leaves recoverable copies behind."
-  - "Historically this is the ancestor of the whole surgical-editing line, including abliteration. Worth knowing where the family started, and that its main flaw — collateral damage from orthogonal projection — was diagnosed and fixed three years later."
-limitations:
-  - "Removes far more of the representation than it needs to. 360 dimensions against LEACE's 17 for the same guarantee."
-  - "Iterative and adversarial in flavour, so it is slower than a closed form and comes with no optimality guarantee about how little it damages the representation."
-  - "Linear classifiers only. The attribute may remain recoverable by a non-linear probe."
-  - "Fairness in the sense of 'a probe cannot read the attribute' is not the same as fairness in behaviour, a gap this whole line of work still has."
+  - "<strong>Iterative Nullspace Projection (INLP).</strong> Train a linear classifier to predict the attribute, project the representation onto that classifier's nullspace so it can no longer work, then repeat. Each round removes one more linearly decodable direction."
+  - "<strong>Makes the representation linearly guarded</strong> — after enough iterations no linear classifier separates the data by the attribute. The first practical version of that guarantee."
+  - "<strong>Post-hoc and cheap.</strong> No retraining and no access to the original objective; it operates on frozen representations."
 ---
 
 ## The method
@@ -30,39 +19,53 @@ limitations:
 Take frozen representations $X$ and a protected attribute $Z$.
 
 1. Train a linear classifier to predict $Z$ from $X$.
-2. Project $X$ onto that classifier's nullspace. The classifier is now useless, because
-   the direction it relied on is gone.
-3. Repeat. Train a fresh classifier on the projected representations, and it will find
-   another direction. Project that out too.
+2. Project $X$ onto that classifier's nullspace. The classifier is now useless, because the
+   direction it relied on is gone.
+3. Repeat. Train a fresh classifier on the projected representations and it will find another
+   direction. Project that out too.
 
-After enough rounds, no linear classifier can recover the attribute. That is linear
-guardedness, and INLP was the first practical route to it.
+After enough rounds, no linear classifier can recover the attribute.
 
 ## What it costs
 
-Every iteration deletes a direction from the representation, permanently. Around 20
-iterations are typically needed, and the cumulative cost is roughly 360 destroyed
-dimensions.
+Every iteration deletes a direction from the representation, permanently. Around 20 iterations
+are typically needed, and the cumulative cost is roughly **360 destroyed dimensions** — a figure
+reported by the [LEACE](https://arxiv.org/abs/2306.03819) authors when comparing against it.
+LEACE achieves the same guarantee at a cost of **17**.
 
-That the loop needs 20 rounds at all is informative. If the attribute lived in one
-direction, one projection would finish the job. It does not, because the information is
-distributed and correlated across many directions, so removing one leaves enough behind for
-a fresh classifier to find another.
+That gap is the clearest available price tag on projecting orthogonally in a space that is not
+round. INLP deletes whole dimensions; LEACE whitens first, projects in the corrected space,
+unwhitens, and deletes only the correlation.
 
-The same thing shows up in [LEACE](https://arxiv.org/abs/2306.03819) as rediscovery across
-layers, and in [Concept Cones](https://arxiv.org/abs/2502.17420) as a cone rather than a
-line. Three different setups, one recurring observation: a concept is never in only one
-place.
+The iteration count is informative in its own right. If the attribute lived in one direction,
+one projection would finish the job. It does not, because the information is distributed and
+correlated across many directions, so removing one leaves enough behind for a fresh classifier
+to find another.
+
+The same thing shows up in LEACE as rediscovery across layers, and in
+[Concept Cones](https://arxiv.org/abs/2502.17420) as a cone rather than a line. Three different
+setups, one recurring observation: a concept is never in only one place.
 
 ## Why it matters for abliteration
 
-INLP and abliteration are the same manoeuvre at different scales. Both find a direction
-that carries a concept and remove it by orthogonal projection.
+INLP and abliteration are the same manoeuvre at different scales. Both find a direction carrying
+a concept and remove it by orthogonal projection, and both inherit the same problem — they take
+unrelated information with the target because they do not correct for the shape of the space
+first.
 
-INLP's 360-versus-17 comparison against LEACE is the clearest available price tag on
-projecting orthogonally in a space that is not round. LEACE gets the identical guarantee by
-whitening first, projecting in the corrected space, and unwhitening — and keeps 343 more
-dimensions of the representation.
+Historically this is the ancestor of the whole surgical-editing line, abliteration included.
+Worth knowing where the family started, and that its main flaw was diagnosed and fixed three
+years later.
 
-Nobody has run that comparison for refusal directions. It is the experiment I most want to
-see.
+Nobody has run the equivalent comparison for refusal directions. It is the experiment I most
+want to see.
+
+## Its limits
+
+It removes far more of the representation than it needs to. It is iterative and adversarial in
+flavour, so it is slower than a closed form and comes with no optimality guarantee about how
+little it damages the representation.
+
+And the guarantee covers linear classifiers only — the attribute may remain recoverable by a
+non-linear probe. As with everything in this family, "a probe cannot read the attribute" is not
+the same as fairness in behaviour, and that gap is still open.

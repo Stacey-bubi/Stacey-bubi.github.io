@@ -5,67 +5,57 @@ year: 2025
 venue: ICML 2025 workshop (R2-FM)
 theme: internals
 url: https://arxiv.org/abs/2507.08218
-why: "A surprising generalisation result turns out to be a steering vector in disguise. It is a good reminder that impressive-looking behaviour often has a boring linear mechanism, and it makes fine-tuning attacks easier to reason about."
+why: "A surprising generalisation result turns out to be a steering vector in disguise. A good reminder that impressive-looking behaviour often has a boring linear mechanism, and it makes fine-tuning attacks easier to reason about."
 question: "Fine-tuned models sometimes generalise out of distribution far more than they should — this is out-of-context reasoning. Is something sophisticated happening, or is there a simpler mechanism?"
 contributions:
-  - "<strong>Shows LoRA fine-tuning often just adds a constant steering vector.</strong> In many reported cases of out-of-context reasoning, the adapter's effect reduces to adding a fixed vector to the activations, pushing the model toward a general concept."
-  - "<strong>Explains the generalisation.</strong> A constant push toward a concept improves the fine-tuning task and everything else related to that concept at the same time. What looked like the model reasoning beyond its training data is one vector applying everywhere."
-  - "<strong>Confirms it by construction.</strong> Steering vectors trained directly from scratch, with no fine-tuning at all, reproduce the same out-of-context reasoning behaviour."
-  - "<strong>Extends to cases that look conditional.</strong> Even for model backdoors, where the behaviour appears to depend on a trigger, unconditionally adding a steering vector is enough to produce it."
-notes:
-  - "The backdoor result is the one that made me sit up. A backdoor looks like the clearest possible case of conditional logic — do the bad thing if and only if the trigger appears. That an unconditional constant vector reproduces it says the conditionality can live entirely in how the concept interacts with context, not in a learned if-statement."
-  - "Useful discipline in the other direction too: before believing a model has learned something structured, check whether a constant offset explains it."
-  - "It connects fine-tuning attacks to activation steering. If LoRA fine-tuning is largely adding a direction, then fine-tuning-based safety removal and activation-based safety removal are closer relatives than they look, and defences might generalise across both."
-  - "It also sits well with <a href='https://arxiv.org/abs/2505.14185'>Safety Subspaces</a>. If fine-tuning mostly moves the model along a few directions, it is unsurprising that harmless fine-tuning collides with the directions safety uses."
-limitations:
-  - "A workshop paper, so scope is limited relative to the claim's reach."
-  - "'Many instances of OOCR in the literature' is not all of them. This shows a simple mechanism suffices in the cases examined, not that no case requires more."
-  - "LoRA specifically. Low-rank adapters are structurally predisposed toward low-rank, steering-like effects, so how far this extends to full fine-tuning is a fair question."
+  - "<strong>Shows LoRA fine-tuning often just adds a constant steering vector.</strong> In many reported cases of out-of-context reasoning, the adapter's effect reduces to adding a fixed vector that pushes the model toward a general concept — which improves the fine-tuning task and everything else related to that concept at once."
+  - "<strong>Confirms it by construction:</strong> steering vectors trained directly from scratch, with no fine-tuning at all, reproduce the same behaviour."
+  - "<strong>Extends to cases that look conditional.</strong> Even for model backdoors, where behaviour appears to depend on a trigger, unconditionally adding a steering vector is enough."
 ---
 
 ## The claim
 
-Out-of-context reasoning is the observation that a fine-tuned model sometimes generalises
-much further than the fine-tuning data should support. It has been treated as evidence of
-something structured going on inside.
+Out-of-context reasoning is the observation that a fine-tuned model sometimes generalises much
+further than the fine-tuning data should support. It has been treated as evidence of something
+structured going on inside.
 
-This paper offers a duller explanation for many of the reported cases. LoRA fine-tuning
-ends up adding what amounts to a constant steering vector to the activations, pushing the
-model toward some general concept. That single push helps on the fine-tuning task and on
-every other task related to that concept, which is what the surprising generalisation
-consists of.
-
-Two pieces of evidence support it. Steering vectors trained from scratch, without any
-fine-tuning, reproduce the behaviour. And the same explanation holds for backdoors, where
-adding the vector unconditionally is enough — even though the behaviour looks like it must
-depend on a trigger.
+This paper offers a duller explanation for many of the reported cases. LoRA fine-tuning ends up
+adding what amounts to a constant steering vector to the activations, pushing the model toward
+some general concept. That single push helps on the fine-tuning task and on every other task
+related to that concept, which is what the surprising generalisation consists of.
 
 ## Why the backdoor case is the interesting one
 
-A backdoor is the textbook example of conditional computation: behave normally, unless the
-trigger appears.
+A backdoor is the textbook example of conditional computation: behave normally, unless the trigger
+appears.
 
-If an unconditional constant vector reproduces that, the conditionality is not stored as a
-rule the model checks. It emerges from how a constant push interacts with context — the
-same nudge only changes the output when the surrounding context makes that output
-plausible.
+If an unconditional constant vector reproduces that, the conditionality is not stored as a rule the
+model checks. It emerges from how a constant push interacts with context — the same nudge only
+changes the output when the surrounding context makes that output plausible.
 
-That is a genuinely different mental model of what fine-tuning does, and a more tractable
-one.
+That is a genuinely different mental model of what fine-tuning does, and a more tractable one.
 
 ## What it means for the rest of this list
 
-If fine-tuning mostly moves models along a small number of directions, then two things
-that are usually discussed separately are closer than they look.
-[Abliteration](https://arxiv.org/abs/2406.11717) edits activations or weights along a
-direction. Fine-tuning attacks retrain the model. If the retraining is largely equivalent
-to adding a direction, the two attack families overlap heavily, and a defence against one
-has a chance against the other.
+If fine-tuning mostly moves models along a small number of directions, then two things usually
+discussed separately are closer than they look.
+[Abliteration](https://arxiv.org/abs/2406.11717) edits activations or weights along a direction.
+Fine-tuning attacks retrain the model. If the retraining is largely equivalent to adding a
+direction, the two attack families overlap heavily, and a defence against one has a chance against
+the other.
 
-It also gives a mechanism for the result in
-[Safety Subspaces](https://arxiv.org/abs/2505.14185). If fine-tuning is a push along a few
-directions, and safety occupies directions that overlap with general capability, then
-harmless fine-tuning breaking alignment is exactly what you would predict.
+It also gives a mechanism for [Safety Subspaces](https://arxiv.org/abs/2505.14185). If fine-tuning
+is a push along a few directions, and safety occupies directions overlapping with general
+capability, then harmless fine-tuning breaking alignment is exactly what you would predict.
 
 The general lesson is the one I want to keep: check whether a constant offset explains the
 behaviour before concluding the model learned something clever.
+
+## How far to trust it
+
+It is a workshop paper, so the scope is limited relative to the claim's reach. "Many instances of
+out-of-context reasoning in the literature" is not all of them — this shows a simple mechanism
+suffices in the cases examined, not that no case requires more.
+
+And it is about LoRA specifically. Low-rank adapters are structurally predisposed toward low-rank,
+steering-like effects, so how far this extends to full fine-tuning is a fair question.

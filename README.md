@@ -35,33 +35,34 @@ theme: geometry              # geometry | erasure | attack | defense | internals
 url: https://arxiv.org/abs/…  # omit rather than guess
 code: https://github.com/…    # optional
 why: One line. The opinionated hook, always visible on the card.
-question: What the paper is asking.
+question: What the paper is asking. One short paragraph.
 contributions:
-  - What the paper contributes, in its own right.
-evaluation: Models, datasets, metrics and baselines in one paragraph.  # optional
-results:
-  - Headline numbers worth remembering.                                # optional
-notes:
-  - My own reading. Clearly mine, not the paper's.                     # optional
-limitations:
-  - Where I think it is weak.                                          # optional
+  - What the paper contributes, in its own right. 3–4 bullets.
 pathOrder: 3                 # optional: position in the "start here" path
 pathNote: One line on its role in that path.
 ---
 
-Optional MDX body. Its presence is what creates the /papers/<slug>/ page and the
-"read the full note" link on the card. No body means the card is the whole entry.
+The MDX body. Datasets, metrics, baselines, headline numbers, my notes and the
+limitations all live here, as prose. Its presence creates the /papers/<slug>/ page
+and the "read the full note" link on the card.
 ```
 
 Notes on the fields:
 
-- **`contributions` is what the paper claims; `notes` is what I think.** Keep the
-  line clean. A baseline the paper compares against does not belong in
-  `contributions`.
+- **`contributions` is the only bulleted list on the site, and that is deliberate.**
+  Lists of results, notes and limitations made every entry heavy and repeated what
+  the body already said, so they were folded into the prose. Resist adding them back.
+- **`contributions` is what the paper claims; the body is where I argue with it.**
+  A baseline the paper compares against does not belong in `contributions`.
+- Do not restate datasets and metrics unless they *are* the contribution. Name a
+  method in a few words if it matters (RDO, MSO, concept scrubbing) and let the body
+  explain it.
 - Card fields accept inline HTML (`<em>`, `<code>`, `<a>`) and inline maths with
   `$…$`, rendered by `src/utils/math.ts`. Display maths (`$$…$$`) only works in
   the body.
 - Escape backslashes in frontmatter maths: `$r = \\mu - \\nu$`.
+- The body is indexed by the search box (see `src/utils/search.ts`), so notes stay
+  findable even though they are no longer structured fields.
 - **Never guess a URL.** Omit the field instead. Check links with:
 
   ```bash

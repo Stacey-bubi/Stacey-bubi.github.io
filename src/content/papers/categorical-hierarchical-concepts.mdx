@@ -9,59 +9,58 @@ code: https://github.com/KihoPark/LLM_Categorical_Hierarchical_Representations
 why: "The follow-up that fixes the obvious hole in the linear representation hypothesis. Most concepts are not binary opposites — there is no natural opposite of 'bird' — and this shows what those look like geometrically. They are polytopes, not directions."
 question: "The earlier formalisation of linear representations relies on counterfactual pairs like male/female. Most concepts have no natural contrast — what is the opposite of 'mammal'? How are categorical concepts represented, and does the hierarchy between concepts show up in the geometry?"
 contributions:
-  - "<strong>Extends the formalisation from contrasts to vectors.</strong> Removes the requirement that a concept come with a natural binary opposite, so concepts like 'is this about an animal' can be handled."
-  - "<strong>Represents categorical concepts as polytopes.</strong> A concept with $k$ mutually exclusive values (mammal, bird, reptile, fish) is a simplex in representation space, not a single direction. The direction picture is the two-value special case."
-  - "<strong>Proves the hierarchy is encoded geometrically.</strong> Semantic containment — a bird is an animal — corresponds to a specific relationship between the representations, so the taxonomy is visible in the geometry rather than only in the labels."
-  - "<strong>Validates at scale on real hierarchies.</strong> Estimates representations for over 900 hierarchically related concepts taken from WordNet."
-evaluation: "Gemma and Llama-3, with concept hierarchies drawn from WordNet — more than 900 concepts standing in known hierarchical relations to each other."
-notes:
-  - "This is the piece that makes the linear representation hypothesis less of a special case. Binary contrasts were always a convenient subset, and it was never obvious that anything followed for the rest."
-  - "Polytopes and cones are the same shift in shape from two directions. This paper says a categorical concept is a simplex; <a href='https://arxiv.org/abs/2502.17420'>Concept Cones</a> says refusal is a cone. Both replace a line with a region, which is the pattern I would now expect by default."
-  - "That a taxonomy shows up as geometric structure is a real result and not an obvious one. The model was trained to predict tokens, and nothing in that objective asks for the WordNet hierarchy to be geometrically legible."
-  - "It shares the parent paper's limitation: this is the vocabulary space, not the intermediate layers where interventions happen."
-limitations:
-  - "Still built on the representation spaces at the edges of the model, so the connection to steering and ablation in the middle layers is not made."
-  - "The concepts are WordNet nouns — clean, well-structured and hand-curated. Whether messier concepts like refusal or harmfulness have this structure is an open question, and they are the ones I care about."
-  - "Two model families. As the earlier paper showed with LLaMA-2 versus Gemma, geometric findings do not always transfer between models."
+  - "<strong>Extends the formalisation from contrasts to vectors</strong>, dropping the requirement that a concept come with a natural binary opposite."
+  - "<strong>Represents categorical concepts as polytopes.</strong> A concept with $k$ mutually exclusive values is a simplex in representation space, not a single direction — the direction picture is just the two-value special case."
+  - "<strong>Proves the hierarchy is encoded geometrically:</strong> semantic containment, a bird is an animal, corresponds to a specific relationship between the representations, validated on 900+ hierarchically related WordNet concepts in Gemma and Llama-3."
 ---
 
 ## Why binary contrasts were never enough
 
-The [earlier formalisation](https://arxiv.org/abs/2311.03658) defines a concept direction
-from counterfactual pairs: queen minus king, woman minus man. It is precise and it works,
-but it needs the concept to have a natural opposite.
+The [earlier formalisation](https://arxiv.org/abs/2311.03658) defines a concept direction from
+counterfactual pairs: queen minus king, woman minus man. It is precise and it works, but it needs
+the concept to have a natural opposite.
 
-Most concepts do not. There is no natural counterfactual for "bird". You can contrast it
-with "mammal", but that is a choice among several, and different choices give different
-directions. The formalism had nothing to say about the majority of what a model knows.
+Most concepts do not. There is no natural counterfactual for "bird". You can contrast it with
+"mammal", but that is a choice among several, and different choices give different directions. The
+formalism had nothing to say about the majority of what a model knows.
 
 ## Polytopes instead of directions
 
 The fix is to stop asking for a direction and start asking for a shape.
 
-A categorical concept with several mutually exclusive values is represented as a
-**polytope** — for $k$ values, a simplex — with each value occupying a vertex. A binary
-concept is then the degenerate case: two vertices, and the line between them is the
-familiar direction.
+A categorical concept with several mutually exclusive values is represented as a **polytope** —
+for $k$ values, a simplex — with each value at a vertex. A binary concept is then the degenerate
+case: two vertices, and the line between them is the familiar direction.
 
-Then the hierarchical result. Semantic containment between concepts corresponds to a
-specific geometric relationship between their representations. The taxonomy is not just
-metadata about the concepts; it is present in the arrangement of the vectors.
+Then the hierarchical result. Semantic containment between concepts corresponds to a specific
+geometric relationship between their representations. The taxonomy is not merely metadata about
+the concepts; it is present in the arrangement of the vectors.
 
 This is worth pausing on. The model was trained to predict the next token. Nothing in that
-objective requires the WordNet hierarchy to be recoverable from the geometry of its
-vocabulary space, and yet it is.
+objective requires the WordNet hierarchy to be recoverable from the geometry of its vocabulary
+space, and yet it is.
 
 ## The pattern I keep noticing
 
 Two papers on this list, from unrelated directions, both replace a line with a region.
 
 Here, a categorical concept is a simplex rather than a direction. In
-[Concept Cones](https://arxiv.org/abs/2502.17420), refusal is a cone rather than a
-direction. The first is a statement about how meaning is organised, the second about how
-behaviour is mediated, and they were not written in conversation with each other.
+[Concept Cones](https://arxiv.org/abs/2502.17420), refusal is a cone rather than a direction. The
+first is a statement about how meaning is organised, the second about how behaviour is mediated,
+and they were not written in conversation with each other.
 
 If a concept generally occupies a region, then any method whose whole plan is to find *the*
-direction and remove it is working with the wrong shape from the start. That is not fatal —
-removing a line from a region still does something — but it does explain why single
-directions keep turning out to be incomplete.
+direction and remove it is working with the wrong shape from the start. Not fatal — removing a line
+from a region still does something — but it explains why single directions keep turning out to be
+incomplete.
+
+## Its limits
+
+It shares the parent paper's main gap: this is the representation space at the edges of the model,
+not the intermediate layers where steering and ablation happen, so the connection to interventions
+is not made.
+
+The concepts are also WordNet nouns — clean, well-structured and hand-curated. Whether messier
+concepts like refusal or harmfulness have this structure is an open question, and those are the
+ones I care about. And with two model families tested, transfer is not guaranteed: as the earlier
+paper showed with LLaMA-2 versus Gemma, geometric findings do not always survive a change of model.

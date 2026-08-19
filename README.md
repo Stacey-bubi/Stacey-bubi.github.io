@@ -82,11 +82,3 @@ Actions** set once, by hand.
 `<user>.github.io` uses `base: '/'`; any other name needs `base: '/<repo>'`.
 Getting this wrong is the classic "site deploys but every stylesheet 404s".
 
-## Notes on the build
-
-- KaTeX CSS and woff2 fonts are vendored into `public/katex/`, so the published
-  page makes **zero external requests**.
-- Filtering, search, sorting and expand-all are ~90 lines of vanilla JS in
-  `src/components/Controls.astro`. No search index, no framework.
-- Themes are defined once in `src/data/themes.ts`; the `hue` there drives every
-  chip colour through a CSS custom property.

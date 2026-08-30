@@ -7,7 +7,7 @@ import rehypeKatex from 'rehype-katex'
 // If the repo is ever renamed, these two lines are the only place to change.
 // Repo named `<user>.github.io` -> base: '/'.  Any other name -> base: '/<repo>'.
 const SITE = 'https://stacey-bubi.github.io'
-const BASE = '/blogs'
+const BASE = '/'
 
 export default defineConfig({
   site: SITE,

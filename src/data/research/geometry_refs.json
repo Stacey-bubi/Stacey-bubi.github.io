@@ -1,0 +1,62 @@
+[
+  {
+    "model": "Phi-4-mini-instruct",
+    "split_half": 0.40361320972442627,
+    "harmless_noise": 0.5274030566215515,
+    "null_reduced": 0.06028318898306607,
+    "null_full": 0.001956208745811713,
+    "P": 100,
+    "d": 3072,
+    "K": 6,
+    "shrinkage": 0.015296971425414085,
+    "whitener_valid": true,
+    "n_pool": 768,
+    "layer": 31,
+    "n_layers": 32
+  },
+  {
+    "model": "Qwen2.5-1.5B-Instruct",
+    "split_half": 0.3811378479003906,
+    "harmless_noise": 0.5874336361885071,
+    "null_reduced": 0.06028318898306607,
+    "null_full": 0.00391634468836439,
+    "P": 100,
+    "d": 1536,
+    "K": 6,
+    "shrinkage": 0.013238831423223019,
+    "whitener_valid": true,
+    "n_pool": 768,
+    "layer": 27,
+    "n_layers": 28
+  },
+  {
+    "model": "SmolLM3-3B",
+    "split_half": 0.5403920412063599,
+    "harmless_noise": 0.48491132259368896,
+    "null_reduced": 0.06028318898306607,
+    "null_full": 0.0029543406545929386,
+    "P": 100,
+    "d": 2048,
+    "K": 6,
+    "shrinkage": 0.008281531743705273,
+    "whitener_valid": true,
+    "n_pool": 768,
+    "layer": 36,
+    "n_layers": 36
+  },
+  {
+    "model": "granite-4.1-3b",
+    "split_half": 0.4694420099258423,
+    "harmless_noise": 0.5773777365684509,
+    "null_reduced": 0.06028318898306607,
+    "null_full": 0.0023678873522906298,
+    "P": 100,
+    "d": 2560,
+    "K": 6,
+    "shrinkage": 0.016191769391298294,
+    "whitener_valid": true,
+    "n_pool": 768,
+    "layer": 40,
+    "n_layers": 40
+  }
+]

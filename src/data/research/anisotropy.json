@@ -1,0 +1,26 @@
+[
+  {
+    "model": "Phi-4-mini-instruct",
+    "participation_ratio": 8.922394752502441,
+    "d": 3072,
+    "layer": 31
+  },
+  {
+    "model": "Qwen2.5-1.5B-Instruct",
+    "participation_ratio": 8.002104759216309,
+    "d": 1536,
+    "layer": 27
+  },
+  {
+    "model": "SmolLM3-3B",
+    "participation_ratio": 13.325883865356445,
+    "d": 2048,
+    "layer": 36
+  },
+  {
+    "model": "granite-4.1-3b",
+    "participation_ratio": 9.329500198364258,
+    "d": 2560,
+    "layer": 40
+  }
+]

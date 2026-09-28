@@ -1,0 +1,64 @@
+---
+import Base from '../../layouts/Base.astro'
+import { href } from '../../utils/url'
+
+const title = 'Research'
+const description =
+  'Small studies I have run myself on refusal directions in language models.'
+
+const posts = [
+  {
+    slug: 'refusal-ablation',
+    title: 'How hard do you have to push to break refusal?',
+    lede: 'Replicating Arditi et al. on Qwen2.5, then turning the knob down.',
+    status: 'finished',
+    summary:
+      'The single-direction result reproduces on Qwen2.5-7B and 14B. Adding a scaling knob to the ablation shows two things I did not expect: refusal is gone well before full ablation, and partial ablation damages the model more than full ablation does.'
+  },
+  {
+    slug: 'abliteration-selectivity',
+    title: 'Removing the refusal direction from four models',
+    lede: 'Does removing refusal break maths, or just break the model?',
+    status: 'draft',
+    summary:
+      'A pilot across four model families. The reproduction worked cleanly on one of them, and the geometry turned out more interesting than the behaviour: a pure-noise subspace overlaps refusal as much as a maths subspace does, so the uncorrected overlap numbers mean nothing.'
+  }
+]
+---
+
+<Base title={title} description={description}>
+  <div class="wrap intro">
+    <h1>Research</h1>
+    <p>
+      Small studies I have run myself, mostly on how fragile refusal is and on
+      whether the geometry people measure means what they think it means. Both use
+      difference-in-means and forward hooks, no training.
+    </p>
+  </div>
+
+  <div class="wrap">
+    <div class="cards">
+      {
+        posts.map((p) => (
+          <article class="card" style="--h:200">
+            <h3 class="card__title">
+              <a href={href(`research/${p.slug}`)}>{p.title}</a>
+            </h3>
+            <p class="meta">
+              <span class="tag">{p.status}</span>
+              <span class="sep">·</span>
+              <span>{p.lede}</span>
+            </p>
+            <p class="why">
+              <b>What came out of it</b>
+              {p.summary}
+            </p>
+            <a class="card__link" href={href(`research/${p.slug}`)}>
+              Read it &rarr;
+            </a>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</Base>

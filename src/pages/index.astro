@@ -105,14 +105,13 @@ const description =
     <section class="own-work">
       <h2>My own work</h2>
       <p>
-        I ran a small study on the papers above: reproducing single-direction refusal
-        ablation on four models, then checking whether refusal and maths really overlap
-        inside the model. It is a draft, and the interesting part is which half of the
-        result survived a proper chance baseline.
+        Two small studies on the papers above. One replicates the single-direction
+        refusal result on Qwen2.5 and adds a knob to the ablation, which turns up a
+        result I did not expect: partial ablation damages the model more than full
+        ablation does. The other is a draft asking whether refusal and maths really
+        overlap inside the model.
       </p>
-      <a class="card__link" href={href('research/abliteration-selectivity')}>
-        Removing the refusal direction from four models &rarr;
-      </a>
+      <a class="card__link" href={href('research')}>Both write-ups &rarr;</a>
     </section>
 
     <p class="empty">

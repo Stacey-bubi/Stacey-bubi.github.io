@@ -1,0 +1,50 @@
+---
+import Base from './Base.astro'
+import { href } from '../utils/url'
+
+/** Layout for a research write-up authored as MDX. Frontmatter supplies the header. */
+interface Props {
+  frontmatter: {
+    title: string
+    lede?: string
+    description: string
+    date?: string
+    status?: string
+    facts?: string[]
+  }
+}
+
+const { frontmatter: f } = Astro.props
+---
+
+<Base title={f.title} description={f.description}>
+  <div class="wrap paper-head">
+    <a class="back-link" href={href('research')}>&larr; Research</a>
+    <h1>{f.title}</h1>
+    {f.lede && <p class="lede">{f.lede}</p>}
+    <p class="meta">
+      <span class="tag" style="--h:200">My own work</span>
+      {
+        (f.facts ?? []).map((fact) => (
+          <>
+            <span class="sep">·</span>
+            <span>{fact}</span>
+          </>
+        ))
+      }
+    </p>
+    {
+      f.status && (
+        <p class="draft-badge">
+          <Fragment set:html={f.status} />
+        </p>
+      )
+    }
+  </div>
+
+  <div class="wrap">
+    <article class="prose prose--paper">
+      <slot />
+    </article>
+  </div>
+</Base>

@@ -1018,3 +1018,23 @@ hr {
   font-size: 0.9375rem;
   max-width: var(--measure);
 }
+
+/* Figures inside a research write-up. The plots are rendered on white, so they get
+   an explicit light plate rather than glowing against the dark theme. */
+.prose img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem;
+  margin-block: 1.5rem;
+}
+
+.paper-head .lede {
+  font-size: 1.0625rem;
+  color: var(--text-muted);
+  margin: 0 0 0.9rem;
+  max-width: var(--measure);
+}

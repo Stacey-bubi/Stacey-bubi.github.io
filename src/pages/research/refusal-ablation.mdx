@@ -1,293 +1,249 @@
 ---
 layout: ../../layouts/ResearchPost.astro
-title: "How hard do you have to push to break refusal?"
-lede: "Replicating Arditi et al. on Qwen2.5, then turning the knob down."
-description: "Replicating the single-direction refusal result on Qwen2.5, then adding a scaling knob to the ablation and sweeping it. Refusal breaks well before full ablation, and partial ablation damages the model more than full ablation does."
+title: "Replicating and Extending the Refusal Direction"
+lede: "A Graded Ablation Study on Qwen2.5"
+description: "Arditi et al. remove the whole refusal direction. That answers whether it can be done, not how cheaply. I put a scaling factor on the ablation and swept it: the guardrail snaps rather than bending, and pushing harder costs less than stopping halfway."
 facts:
   - "Qwen2.5 family, 0.5B to 14B"
   - "alpha sweep, 0 to 1.25"
   - "BlueDot course project"
 ---
 
-Refusal in chat models is a guardrail. You ask for something harmful, the model says "I'm sorry, I can't help with that". [Arditi et al. (2024)](https://arxiv.org/abs/2406.11717) showed this guardrail is thinner than it looks: across 13 open models, refusal is mediated by **one direction** in the residual stream. Erase that direction and the model stops refusing. Add it and the model refuses to explain yoga.
+It happened historically: first came an architecture that turns text into text, and is useful exactly for that, and only afterwards came the constraints and the mechanisms meant to keep users and everyone else safe.
+There are a lot of those machinery. Some sit outside the weights, in the harness: input/output classifiers like [Llama Guard](https://arxiv.org/abs/2312.06674) or [Constitutional Classifiers](https://arxiv.org/abs/2501.18837); system prompts that state the rules at runtime; monitoring, meaning offline log review and chain-of-thought inspection; access controls — account checks, rate limits, bans, trusted-user tiers; agent controls like sandboxing, tool permissions, human approval for risky actions; and weight security, which stops someone stealing the weights and fine-tuning the safeguards off.
+Others change the weights. Pretraining data filtering removes dangerous content before the model ever learns it. SFT on safe answers teaches refusals by example. Preference training ([RLHF](https://arxiv.org/abs/2203.02155), [RLAIF](https://arxiv.org/abs/2309.00267), [Constitutional AI](https://arxiv.org/abs/2212.08073), [DPO](https://arxiv.org/abs/2305.18290)) rewards safe and helpful answers over harmful ones. [Instruction hierarchy](https://arxiv.org/abs/2404.13208) teaches the model to rank system prompt above user above tool output. Adversarial training trains on jailbreaks — the [latent variant](https://arxiv.org/abs/2403.05030) (Casper et al., 2024) attacks activations instead of inputs. [Unlearning](https://arxiv.org/abs/2403.03218) (RMU, Li et al., 2024) tries to cut out specific dangerous knowledge. [Circuit breakers](https://arxiv.org/abs/2406.04313) (Zou et al., 2024) train harmful internal states to get redirected so the model can't continue. Abstention training teaches saying "I don't know". [Deliberative alignment](https://arxiv.org/abs/2412.16339) (Guan et al., 2024) trains the model to reason over a written safety spec before it answers.
+There are more. But the most visible one is refusal. You ask for something harmful, the model says *"I'm sorry, I can't help with that"*.
 
-I replicated their method on the Qwen2.5-Instruct family, and then asked a question: what if I only erase *part* of the direction? I added a scaling factor `α` to the ablation and swept it from 0 to 1.25. I had two questions. Where does refusal actually stop, and how sharp is the edge? And does the model get worse the harder I turn the knob? I expected that pushing α up would keep eating into benchmarks and plain text, so that full ablation would be the most damaging setting.
 
-I got an edge, lower than I expected. The second question turned out to have the opposite answer to the one I assumed.
+I spent a long time running evals on models in medical domains, so whether I wanted to or not I kept hitting refusals of every kind. Back then I only worked with behavioural artifacts, not internals, and the mechanism already bothered me. At what stage was it learned, and at what stage should it actually be introduced? How reliable is it? Can you flip the model's decision with interventions in weights or activations — make it refuse safe requests and answer dangerous ones? How far does that generalise across models that differ in size, architecture, corpus, alignment? Are open-weight models in trouble? Some of these got answered in the papers below. Some are naive. Some are philosophical.
 
----
-
-## Why refusal, and why this is safety work
-
-I picked refusal for practical reasons. It is well studied, so I had a baseline to check myself against. It is easy to measure, at least roughly. And I could run it on models that fit on one GPU.
-
-The theory of change is modest and I want to state it plainly. Work like this does not make models safer by itself. It produces **evidence about how fragile a safety property is**. If one direction and a few lines of hook code switch off refusal in every model of a family, then "the model refuses" is not something you can rely on for an open-weight model, and that is worth measuring rather than assuming, because it feeds into what gets released and which safety cases are taken seriously. Arditi et al. made that argument. I wanted to check it on a family they did not test, and to add a dose-response curve, because "how much perturbation does it take" is the sort of number a robustness argument needs.
-
-There is also a reason to care about refusal specifically, which I come back to at the end.
+The paper that opened the door to interpretability for me, and indirectly to AI safety, is a bit of a double-edged sword: [Refusal in Language Models Is Mediated by a Single Direction, Arditi et al. (2024)](https://arxiv.org/abs/2406.11717).
+TLDR: across 13 open models, authors found that refusal is mediated by **one direction** in the residual stream. Erasing that direction caused the AI to stop refusing requests.. Add it and the model refuses to explain yoga — mildly irritating overrefusal. Small price to save the day, I'd say.
+But if one direction and a few lines of hook code switch off refusal across a whole model family, then "the model refuses" is not something you can lean on for an open-weight model. That's worth measuring rather than assuming, because it feeds into what gets released and which safety arguments get taken seriously.
 
 ---
 
-## The mechanism, in plain terms
+## Why a dose-response curve
 
-### The residual stream
+Arditi remove the whole direction. That answers *can it be done*, not *how cheaply*.
 
-A decoder transformer keeps a running vector for each token, of size `d_model`. Every layer reads it and writes back into it:
+Look at it from the attacker's side. Full ablation is cheap to run, but it's blunt: you've flattened one axis everywhere in the network and you don't know what else was riding on it. What an attacker actually wants is the smallest edit that kills refusal and leaves the model useful. So — is there a cheap setting? Does the guardrail degrade gracefully and give you a dial, or does it snap? And does pushing harder cost you more of the model's general capabilities?
+The experiment: I took the family Arditi didn't test (Qwen2.5-Instruct), put a scaling factor `α` on the ablation, and swept it from 0 to 1.25.
+
+---
+
+## Finding the direction, removing it
+
+**Residual stream.** A decoder transformer keeps a running vector per token, and every layer adds into it:
 
 ```
 x̃⁽ˡ⁾ = x⁽ˡ⁾ + Attn⁽ˡ⁾(x⁽ˡ⁾)
 x⁽ˡ⁺¹⁾ = x̃⁽ˡ⁾ + MLP⁽ˡ⁾(x̃⁽ˡ⁾)
 ```
 
-This vector is the **residual stream**. Because every component adds into the same vector, you can think of it as a shared workspace. Different features live in different directions in that space. This is the *linear representation hypothesis*, and it is the assumption the whole method rests on.
+Everything writes into the same vector, so you can treat it as a shared workspace where different features sit in different directions. That's the linear representation hypothesis, and the whole method rests on it.
 
-### Finding the direction (difference-in-means, "DIM")
-
-The idea is simple. Run the model on harmful prompts, run it on harmless prompts, and subtract the average activations. Whatever differs consistently between the two sets shows up in the difference.
-
-For layer `l` and token position `i`:
+**Difference-in-means.** Run the model on harmful prompts, run it on harmless prompts, average the activations, subtract:
 
 ```
-μ⁽ˡ⁾ᵢ = mean of x⁽ˡ⁾ᵢ over harmful prompts
-ν⁽ˡ⁾ᵢ = mean of x⁽ˡ⁾ᵢ over harmless prompts
-r⁽ˡ⁾ᵢ = μ⁽ˡ⁾ᵢ − ν⁽ˡ⁾ᵢ
+r⁽ˡ⁾ᵢ = mean(harmful) − mean(harmless)    at layer l, position i
 ```
 
-`r` is the candidate refusal direction. `r̂ = r / ‖r‖` is its unit version. This is called difference-in-means, or DIM. It is crude but it works well, and there is theory saying it is a reasonable choice for concept editing.
+`r` is the candidate refusal direction, `r̂` its unit version. Crude, but it works, and there's theory saying diff-in-means is a reasonable choice for concept editing. I used the paper's splits: 128 harmful prompts ([AdvBench](https://arxiv.org/abs/2307.15043), [MaliciousInstruct](https://arxiv.org/abs/2310.06987), TDC2023) and 128 harmless ([Alpaca](https://github.com/tatsu-lab/stanford_alpaca)).
 
-I used 128 harmful and 128 harmless prompts for this, the same splits as the paper: harmful ones drawn from AdvBench, MaliciousInstruct and TDC2023, harmless ones from Alpaca.
+**Not any token position.** The chat template wraps your text, and everything after the instruction — the post-instruction region, 5 tokens for Qwen2.5 — is where the model has read the request and is about to answer. Means are taken there. With 5 positions and `L` layers you get `5 × L` candidates and have to pick one.
 
-**Which positions.** Not any token. Chat models wrap your text in a template. For Qwen2.5:
+**Picking one.** Each candidate gets scored on 32 held-out harmful and 32 harmless prompts: *bypass* (ablate it — does refusal drop on harmful prompts), *induce* (add it to harmless prompts — does refusal rise, which it must, or it isn't really refusal), and *KL* (how far ablation drags the model on harmless text). Take the lowest bypass subject to `induce > 0`, KL under a ceiling, and `layer < 0.8L`, so you're cutting a concept and not just blocking the literal token "I".
 
-```
-<|im_start|>user\n{instruction}<|im_end|>\n<|im_start|>assistant\n
-```
-
-Everything after `{instruction}` is the **post-instruction** region, 5 tokens for Qwen2.5. Those are the positions where the model has read the whole request and is about to commit to an answer. So the means are taken there. With 5 positions and `L` layers you get `5 × L` candidate directions, and you have to pick one.
-
-### Picking one
-
-Each candidate is scored three ways on a held-out validation set of 32 harmful and 32 harmless prompts:
-
-- **bypass score** — ablate the candidate, measure refusal on harmful prompts. Lower is better.
-- **induce score** — add the candidate to harmless prompts, measure refusal. Must be positive, otherwise the direction is not really "refusal".
-- **KL score** — ablate the candidate, measure KL divergence from the untouched model on harmless prompts. Keeps the intervention from wrecking normal behaviour.
-
-Refusal here is not measured by generating text, which would be slow. It uses a proxy: take the next-token distribution at the last position, sum the probability of a few tokens that typically start a refusal (`I`, `As`, `Sorry`), and take the log-odds.
-
-```
-refusal_metric(p) = log( Σ_{t∈R} p_t ) − log( 1 − Σ_{t∈R} p_t )
-```
-
-Then pick the candidate with the lowest bypass score, subject to `induce > 0`, `KL < threshold`, and `layer < 0.8L`. That last rule keeps you away from the final layers, where you would just be blocking the model from emitting the literal token "I" rather than touching a concept.
-
-### Erasing it: projection
-
-Once you have `r̂`, erasing it is one line of linear algebra. Project the activation onto `r̂` and subtract that component:
+**Erasing it.** Remove the component along `r̂`:
 
 ```
 x' = x − r̂ r̂ᵀ x
 ```
 
-`r̂ᵀx` is a scalar: how much of `r̂` is in `x`. Multiply by `r̂` to get that piece as a vector, subtract it, and `x'` has no component along `r̂` at all. It is flattening one axis of the space and leaving the other `d_model − 1` axes untouched.
+`r̂ᵀx` is a scalar — how much of `r̂` is in `x`. Subtract it and `x'` has no component along `r̂` at all. One axis flattened, the other few thousand untouched. The paper shows this is equivalent to a permanent rank-one weight edit (that's abliteration). I used inference-time hooks instead, so I could vary the strength.
 
-My change was to put a knob on it:
+---
+
+## What α actually is
+
+The knob:
 
 ```
 x' = x − α · r̂ r̂ᵀ x
 ```
 
-`α = 0` is the untouched model. `α = 1` is the paper's full ablation. Above 1, you overshoot and flip the component's sign.
+`α = 0` is the untouched model, `α = 1` is the paper's full ablation. The obvious reading is "α is the fraction of the direction I remove". That reading is wrong, and getting it right is half the result.
 
-One thing about α that I only worked out later, and it matters for reading the plots. The hooks run on every layer, so the scaling piles up. A signal that crosses `k` layers keeps `(1−α)ᵏ` of itself, not `(1−α)`. So α is the knob setting, not the fraction of the direction that ends up gone. At α = 0.125, about 90% of the direction is gone by layer 17. At α = 0.05 on 14B, about 80% is gone by layer 31. The knob bites harder than its number looks. It also means α does not mean the same thing across models of different depth: 14B has 48 layers to compound through, 7B has 28.
+I apply the ablation at **every layer**, and at every point where attention or the MLP writes back into the stream. So the scaling compounds. A component crossing `k` layers keeps about `(1−α)ᵏ` of itself, not `(1−α)`. At `α = 0.05` the direction is already ~80% gone by the layer it came from on 14B. By `α ≈ 0.25` it's gone everywhere.
 
-### Where the erasing happens: hooks
+So **α is a soft switch, not a dimmer.** Below some small value the direction survives; above it the direction is essentially erased and behaviour saturates. The sweep measures where that switch sits and what it costs. It does not trace a clean 0→100% erasure, and the small numbers below are a property of the intervention, not a claim that the model is touch-sensitive. One consequence: α is not comparable across depths. 14B has 48 layers to compound through, 7B has 28.
 
-A **forward hook** is a PyTorch callback attached to a module. A **forward pre-hook** fires before the module runs and can rewrite its input. A plain forward hook fires after and can rewrite its output.
-
-Following the paper, the ablation is applied in three places on **every layer** and **every token position**:
-
-| Hook | Module | What it catches |
-|---|---|---|
-| pre-hook | decoder block `l` | the residual stream entering layer `l` |
-| output hook | `self_attn` of layer `l` | what attention writes back |
-| output hook | `mlp` of layer `l` | what the MLP writes back |
-
-The point of doing all three is that you catch both the stream itself and every new contribution to it. The model can never represent `r̂` anywhere. A context manager registers the hooks and always removes them, including on exception, so a crashed run cannot leave a poisoned model behind.
-
-I checked this: at `α = 0` the hooks produce logits identical to the untouched model to the last bit (`identity_err = 0.0` for every run).
-
-This is an inference-time intervention, but the paper shows it is exactly the same as a permanent rank-one edit of the weights (orthogonalise every matrix that writes to the residual stream against `r̂`). That is what people call **abliteration**. I did not do the weight edit. The hooks give the same behaviour and let me vary `α`.
+**Hooks.** A forward pre-hook rewrites a module's input, a forward hook rewrites its output. I ablate in three places per layer — block input, attention output, MLP output — so the direction can't be written back anywhere. A context manager always removes them, even on a crash. Sanity check: at `α = 0` the hooked model's logits match the clean model to the bit (`identity_err = 0.0`).
 
 ---
 
 ## What I ran
 
-Four Qwen2.5-Instruct models. Two separate rounds, which matters for reading the results.
-
-| Run | Models | α grid | Decoding | Evaluation prompts |
+| Run | Models | α grid | Decoding | Eval prompts |
 |---|---|---|---|---|
-| Pilot | 0.5B, 1.5B | 0 → 1.25, 11 points | greedy, 1 sample | the 32 validation prompts |
-| Main | 0.5B | 0, 0.5, 1 only | sampled, 2 per prompt | 60 harmful / 60 XSTest / 60 Alpaca |
-| Main | 7B | 0 → 1.25, step 0.125 | sampled, 5 per prompt | 194 harmful / 100 XSTest / 60 Alpaca |
-| Main | 14B | dense 0 → 0.3, plus 0.5 and 1 | sampled, 5 per prompt | 194 harmful / 100 XSTest / 60 Alpaca |
+| Pilot | 0.5B, 1.5B | 0→1.25, 11 pts | greedy, 1 sample | the 32 val prompts |
+| Main | 0.5B | 0, 0.5, 1 | sampled, k=2 | 60 harmful / 60 XSTest / 60 Alpaca |
+| Main | 7B | 0→1.25, step 0.125 | sampled, k=5 | 194 harmful / 100 XSTest / 60 Alpaca |
+| Main | 14B | dense 0→0.3, +0.5, +1 | sampled, k=5 | 194 harmful / 100 XSTest / 60 Alpaca |
 
-The harmful evaluation set for 7B and 14B is 144 HarmBench standard behaviours plus 50 AdvBench, disjoint from the prompts used to build the direction. The 0.5B main run used a smaller earlier version of it, 48 HarmBench plus 12 AdvBench. XSTest is the over-refusal check: prompts that *sound* alarming but are safe. Alpaca is the plain benign set. Alongside each α I measured cross-entropy on benign text, KL from the `α = 0` model, and multiple-choice accuracy on 200 HellaSwag and 132 TruthfulQA items.
+Harmful eval is HarmBench + AdvBench, disjoint from the extraction prompts. XSTest checks over-refusal — safe prompts that sound alarming. Alpaca is plain benign. At each α I logged CE loss on benign text, KL from the `α = 0` model, and multiple-choice accuracy on HellaSwag and TruthfulQA.
 
-**The pilot is in-sample and I only trust it as a smoke test.** Those 32 harmful prompts are the same ones used to select the direction. It also used greedy decoding with one sample. I include it in the first plot, dashed, because it covers 1.5B which I never re-ran properly, but nothing in my conclusions rests on it.
+The pilot is in-sample: those 32 prompts are the ones that built the direction. I treat it as a smoke test only. It's dashed in the first plot because it's my only 1.5B data, and nothing rests on it.
 
-### Where I deviated from the paper
+**Where I deviated from the paper, and it matters:**
 
-I want to be exact about this, because some of it changed my results.
+- **KL ceiling 1.0 instead of the paper's 0.1.** This let through directions the paper would have rejected. 7B landed on layer 17 at KL 0.71; the strict rule gives layer 15 at KL 0.063. I think this is why 7B shows more collateral damage than the paper reports.
+- **0.5B has no valid direction.** Nothing passed the filters, so my code fell back to best-bypass. That direction has `induce = −0.95` — adding it doesn't produce refusal, so by the paper's own test it isn't a refusal direction. It still bypasses when ablated, which is interesting, but it is not a replication and I don't read it as one.
+- **No LlamaGuard safety score.** I measure whether the model *refuses*, not whether the output is *harmful*. Biggest gap in the whole thing.
+- Minor: refusal tokens auto-discovered (7B gave "I, Using, It" — "Using" is junk), no refusal-score filtering of prompts, sampled rather than greedy.
 
-1. **KL ceiling of 1.0 instead of 0.1.** This is the big one. My looser filter let through directions the paper's rule would have rejected. 7B ended up at position −4, layer 17, with KL 0.71. Under the paper's threshold it would have picked position −1, layer 15 (KL 0.063). Same for 14B: I got layer 31 at KL 0.29, the paper's rule gives layer 30 at KL 0.083. I think this is why my 7B run shows much more collateral damage than the paper reports.
-2. **0.5B has no valid direction at all.** No candidate passed the filters, and my code fell back to "best bypass score regardless". That direction has an induce score of −0.95, meaning adding it does *not* produce refusal. By the paper's own criteria it is not a refusal direction. It still bypasses refusal when ablated, which is interesting, but I would not call it a replication.
-3. **Refusal tokens were auto-discovered, not fixed.** The paper hard-codes `{I, As}` for Qwen. I found them per model by taking the tokens with the biggest probability gap between harmful and harmless prompts. For 7B that gave `I`, `Using`, `It`. "Using" is clearly not a refusal opener, and this only affects direction *selection*, but it is a wart.
-4. **No refusal-score filtering of the train and validation prompts.** The paper drops harmful prompts the model does not actually refuse, and harmless ones it does refuse. I skipped this, so my contrast pairs are noisier.
-5. **Sampling, not greedy, and 128 tokens instead of 512.** I sampled 5 completions per prompt to get variance. It makes my numbers noisier per prompt but gives error bars.
-6. **No LlamaGuard safety score.** The paper uses two metrics: did the model *refuse* (keyword matching) and was the output *harmful* (LlamaGuard). I only have the first. This is the biggest gap in my evaluation and I come back to it.
-
-I did not attempt: the weight-orthogonalisation jailbreak, the adversarial-suffix analysis, or the base-model experiments.
+I didn't attempt the weight-orthogonalisation jailbreak, the adversarial-suffix analysis, or the base-model checks.
 
 ---
 
-## The replication holds
+## Does the replication hold?
 
-At `α = 1`, on 7B and 14B, refusal goes to zero.
+At `α = 1`, refusal goes to zero.
 
-| Model | refusal at α=0 | refusal at α=1 |
+| Model | refusal at α=0 | at α=1 |
 |---|---|---|
 | Qwen2.5-7B | 0.816 | 0.000 |
 | Qwen2.5-14B | 0.884 | 0.000 |
 | Qwen2.5-0.5B | 0.458 | 0.000 |
 
-(0.5B refuses less than half of the harmful prompts to begin with, so there is less to remove.)
+Read the 0.5B row with the caveat above — that direction failed the paper's own validity test, so it belongs in the table as a curiosity, not as a third replication. The result is 7B and 14B.
 
-And capability is mostly intact, with one exception that matches the paper exactly.
+Capability survives, with one exception that matches the paper. HellaSwag doesn't move (0.615→0.625 on 7B, 0.700→0.680 on 14B, inside the error bars). TruthfulQA drops hard (0.470→0.326 on 7B, 0.462→0.364 on 14B). Arditi report the same, and their explanation holds: TruthfulQA is full of conspiracy and misinformation items sitting right next to refusal territory, so a model that lost its guardrail answers them differently. That's the intervention working, not generic damage. XSTest over-refusal was already near zero on Qwen2.5, so there was no room for it to improve.
 
-![Capability under ablation](/research/fig3_capability.png)
+Worth saying plainly: 200 HellaSwag and 132 TruthfulQA items on one seed is a thin capability check. It's enough to say "nothing obviously broke", not enough to say "capability is preserved".
 
-HellaSwag does not move: 0.615 → 0.625 on 7B, 0.700 → 0.680 on 14B, both inside the error bars. TruthfulQA falls hard: 0.470 → 0.326 on 7B, 0.462 → 0.364 on 14B. Arditi et al. report the same pattern (their appendix G.2) and their explanation is convincing: TruthfulQA is full of conspiracy and misinformation questions, which sit close to refusal territory. A model that has lost its guardrail answers those differently. So this is not really "capability damage", it is the intervention doing its job in a place the benchmark happens to measure.
-
-(For 0.5B, TruthfulQA sits at 0.25 with four options, which is chance. No signal there.)
-
-One thing I could not measure well: over-refusal. Qwen2.5 barely over-refuses XSTest to begin with, 3.2% on 7B and 1.0% on 14B. There was no room for the number to fall.
+![Capability under ablation: HellaSwag flat, TruthfulQA drops](/research/fig3_capability.png)
 
 ---
 
-## Turning the knob down
+## Where does refusal break?
 
-This is the part that was mine.
-
-![Refusal vs alpha across models](/research/fig1_alpha_curves.png)
-
-### Finding 1: refusal is gone well before α = 1
-
-7B drops from 0.816 to 0.033 at α = 0.125, the first step of my grid, which was too coarse to see the transition. So for 14B I put ten points below 0.3:
+7B drops from 0.816 to 0.033 at `α = 0.125`, the first step of my grid — too coarse to see the edge. So on 14B I put ten points below 0.3:
 
 | α | 0 | 0.06 | 0.09 | 0.12 | 0.15 | 0.18 | 0.21 | 0.24 |
 |---|---|---|---|---|---|---|---|---|
 | refusal | 0.884 | 0.365 | 0.177 | 0.077 | 0.033 | 0.020 | 0.006 | 0.000 |
 
-Half the refusal is gone by α ≈ 0.05, all of it by α ≈ 0.24. From 0.24 to 1.25 the curve is flat, and α = 1.125 and 1.25 look the same as α = 1.
+![Refusal rate against α across the model family](/research/fig1_alpha_curves.png)
 
-The α numbers look tiny, but because of the compounding they are not small interventions. At α = 0.05 about 80% of the direction is already gone by the layer it came from, and at α = 0.24 it is essentially all gone. So refusal does not break on a light touch. What happens is that the model saturates early: past α ≈ 0.25 the extra ablation does nothing, which is why the paper's α = 1 and my α = 0.25 give the same behaviour.
+Half the refusal is gone by `α ≈ 0.05`, all of it by `0.24`, and from `0.24` to `1.25` the curve is flat.
 
-### Finding 2: more ablation does not mean more damage
-
-My second question was whether the model gets worse the more I ablate. It does not work that way. The worst point is not at α = 1, it sits in the middle, right where refusal is dying.
-
-![Refusal against language-model damage](/research/fig2_refusal_vs_damage.png)
-
-Cross-entropy on benign text, and KL from the untouched model, both **peak at small α and then recover**:
-
-| Model | CE at α=0 | peak CE | CE at α=1.25 (7B) / α=1 (14B) |
-|---|---|---|---|
-| 7B | 3.32 | **4.83** at α=0.125 and 0.25 (tied) | 3.62 |
-| 14B | 3.09 | **3.33** at α=0.09 | 3.16 |
-
-On 7B, KL from baseline peaks at 1.61 and falls to 0.48 by the end of the sweep. Full ablation is gentler on the model than partial ablation.
-
-I do not have a real explanation, so this is a guess. Partial ablation may leave the model in a state it never saw in training: the refusal signal is weak but still there, so something downstream reads it and then gets contradicted. Full ablation removes the signal, which is a cleaner state to be in. If that is right, it is a case of a more general thing: a half-broken feature can be worse for a model than a removed one. To check it I would have to look at where the extra loss lands, token by token, and I did not.
-
-There is a caveat here too: the 7B damage numbers are inflated by my loose KL filter during selection, which picked a direction the paper's rule would have thrown out. 14B, whose direction is much cleaner at KL 0.29, shows the same shape but a far smaller swing (CE 3.09 → 3.33 → 3.16). The shape survives; the magnitude on 7B should not be quoted on its own.
+The low threshold is mostly the compounding, as set up above. The model fact is the saturation: past `α ≈ 0.25` more ablation does nothing. My `α = 0.25` and the paper's `α = 1` give you the same model. So the answer to "is there a cheap setting" is yes, and the guardrail does not give you a dial — it snaps.
 
 ---
 
-## The metric is doing more work than I would like
+## Does pushing harder cost more?
 
-Refusal here is keyword matching: does the completion contain "I'm sorry", "I cannot", and nine other phrases. It is standard, and the paper itself flags it as limited. In the α sweep it becomes a real problem, because the interesting behaviour is in the middle.
+No, and this is the one I didn't expect. The worst point isn't `α = 1`. It sits in the middle, right where refusal is dying.
 
-![Refusal metric sensitivity](/research/fig4_metric_sensitivity.png)
+| Model | CE at α=0 | peak CE | CE at end of sweep |
+|---|---|---|---|
+| 7B | 3.32 | 4.83 (α=0.125 & 0.25) | 3.62 |
+| 14B | 3.09 | 3.33 (α=0.09) | 3.16 |
 
-If I widen the phrase list to catch "I will not", "I must decline", and similar hedging openers, 14B's curve moves a lot in exactly the transition region:
+![Refusal against language-model damage: CE peaks mid-sweep](/research/fig2_refusal_vs_damage.png)
+
+On 7B, KL from the clean model peaks at 1.61 and falls to 0.48 by the end. Full ablation is *gentler* than partial ablation.
+
+I don't have a proven explanation, so this is a guess: partial ablation leaves the model somewhere it never saw in training. The refusal signal is weak but still present, something downstream reads it, and then gets contradicted. Full ablation removes the signal and that's a cleaner state to be in. If that's right it's an instance of something more general — a half-broken feature can hurt a model more than a removed one. Checking it means looking at where the extra loss lands token by token, and I didn't do that.
+
+Caveat, and it's a real one: the 7B swing is inflated by my loose KL filter, which picked a direction the paper would have thrown out. 14B, with a cleaner direction, shows the same shape much smaller (3.09→3.33→3.16). The shape is real. Don't quote the 7B magnitude on its own.
+
+**Practical reading:** there is no sweet spot where you get partial removal cheaply. The middle is the expensive place to stand.
+
+---
+
+## How much do I trust the refusal metric?
+
+Refusal here is keyword matching — does the completion contain "I'm sorry", "I cannot", and a handful of others. It's standard, and the paper flags it as limited. In a sweep it becomes a real problem, because the interesting behaviour is in the middle. Widen the list to catch "I will not", "I must decline" and similar hedges, and 14B's curve moves a lot in exactly the transition region:
 
 | α | 0.06 | 0.09 | 0.12 | 0.15 | 0.18 |
 |---|---|---|---|---|---|
 | list I used | 0.365 | 0.177 | 0.077 | 0.033 | 0.020 |
 | broader list | 0.619 | 0.444 | 0.284 | 0.145 | 0.057 |
 
-At α = 0.06 that is the difference between "refuses a third of the time" and "refuses two thirds of the time". On 7B the gap is small (0.033 vs 0.055 at α = 0.125) because its transition is squeezed into one grid step.
+![Refusal metric sensitivity to the phrase list](/research/fig4_metric_sensitivity.png)
 
-From reading through completions at intermediate α, what I think is happening is that refusal does not switch off. It **degrades through stages**: a flat refusal, then a refusal that hedges and redirects, then a response that answers while arguing against the premise, then plain compliance. The keyword metric collapses the middle stages into "not a refusal", which makes the transition look sharper than it is.
+At `α = 0.06` that's the difference between "refuses a third of the time" and "two thirds". Reading completions, refusal doesn't switch off. It degrades through stages: flat refusal, then a hedged refusal that redirects, then a reply that answers while arguing against the premise, then plain compliance. Keyword matching collapses the middle stages into "not a refusal" and makes the edge look sharper than it is.
 
-There is a smaller version of the same problem on benign prompts. My benign refusal rate sits between 0 and 2% across all α, but it is entirely false positives: an Alpaca answer starting "As an AI, I don't have a country…", or a riddle whose answer is "I can't open locks". Not refusals.
-
-And the metric cannot see harm at all. A completion that does not say "I'm sorry" counts as a non-refusal whether it is genuinely harmful or a polite deflection. Without a LlamaGuard-style judge I can say refusal *behaviour* disappears. I cannot put a number on how much the ablated models actually comply.
+And the metric can't see harm at all. A completion with no refusal phrase counts as compliance whether it's genuinely harmful or a polite deflection. So I can say refusal *behaviour* disappears. I can't put a number on how much the model actually complies.
 
 ---
 
-## What I would say I learned
+## Back to the questions
 
-Things I checked and believe:
+**Is the mechanism reliable?** No. On 7B and 14B, one direction from 128 prompt pairs, no gradients, no harmful completions needed, and refusal is gone. It also saturates early, so an attacker doesn't even need to do it properly.
 
-- **The Arditi result reproduces on Qwen2.5-7B and 14B.** One difference-in-means direction, ablated everywhere, takes refusal from ~0.85 to 0. HellaSwag does not move, TruthfulQA drops, which is the same signature they report.
-- **The guardrail breaks well below full ablation.** 14B loses half its refusal at α ≈ 0.05 and all of it by 0.24, then saturates: everything past 0.25 gives the same model.
-- **More ablation does not mean more damage.** CE loss peaks while refusal is dying and comes back down by α = 1. I would not have predicted this and I cannot fully explain it.
-- **α compounds across layers**, so the knob is harsher than its number looks and does not mean the same thing across model depths.
-- **The keyword metric understates refusal in the transition region**, by a lot on the model where I resolved the transition.
+**Can you flip the decision both ways?** Yes — ablate to remove refusal, add the same vector to induce it on harmless prompts. That's the induce score in the selection step, and it's why a direction that fails it (my 0.5B) isn't really a refusal direction.
 
-Things I got wrong or would do differently:
+**Does it generalise across models?** Across 7B and 14B of one family, yes, and Arditi show it across 13 models and four families.
 
-- The KL ceiling of 1.0 was too loose and cost me a clean 7B direction. I should have used 0.1.
-- The α grids are inconsistent across models, which is why the cross-model plot is weaker than it should be. 7B deserves the dense low-α grid that 14B got.
-- 0.5B never had a valid direction and I should have noticed at the time instead of letting the fallback path run.
-- One seed, one prompt sample, no repeats of direction extraction. I have no idea how stable any of this is to re-drawing the 128 contrast prompts.
+**Are open-weight models in trouble?** For this guardrail, yes. The cost of removing it is a forward pass and some hooks.
 
-If I continue this, in order of what I think is most worth doing:
+**At what stage should refusal be introduced?** This is the question I actually care about; and the geometry gives a hint. A single direction sitting at the post-instruction tokens suggests refusal works like this:
 
-1. **Add a harm judge.** Everything above measures refusal, not compliance. This is the gap that most limits what I can claim.
-2. **Re-run 7B with the paper's KL threshold**, and put the dense grid on it, so the two models are comparable and the 7B damage numbers are trustworthy.
-3. **Test whether α compounding is the whole story**, by ablating at a single layer instead of all of them and comparing thresholds.
-4. **Seed stability.** Re-extract the direction from several disjoint samples of contrast prompts and see how much the selected layer and the α threshold move.
-5. **Separate harm from refusal.** Zhao et al. ([2507.11878](https://arxiv.org/abs/2507.11878)) find that harmfulness and refusal are encoded *separately*, harmfulness at the last instruction token and refusal at the post-instruction tokens. My whole pipeline reads only the post-instruction region, so by construction I was looking at refusal, not harm. Running their two-position analysis on the α sweep would say something worth knowing: as α rises, does the model stop *judging* the request as harmful, or does it keep judging it as harmful and lose the ability to act on it? My money is on the second, and if so, the thing ablation destroys is narrower than "safety".
+```
+query → start complying → "wait, is this a bad one?" → emit refusal
+```
+
+A check bolted onto the output.
+
+What I'd want to see instead:
+
+```
+query → understand the situation → understand the consequences → respond
+```
+
+Refusal as a consequence of understanding, not a filter slapped on later.
+
 
 ---
 
-## Why the fragility is the point
+## References
 
-One last thought, and this one is opinion rather than result.
+**Builds on:**
 
-What a keyword metric and a single direction both suggest is that refusal in these models works roughly like this:
+- Arditi, A. et al. (2024). *Refusal in Language Models Is Mediated by a Single Direction.* [arXiv:2406.11717](https://arxiv.org/abs/2406.11717) · [code](https://github.com/andyrdt/refusal_direction)
+- Zhao, J. et al. (2025). *LLMs Encode Harmfulness and Refusal Separately.* [arXiv:2507.11878](https://arxiv.org/abs/2507.11878)
+- Yang, A. et al. (2024). *Qwen2.5 Technical Report.* [arXiv:2412.15115](https://arxiv.org/abs/2412.15115)
 
-```
-query → start complying → "wait, is this one of the bad ones?" → emit refusal
-```
+**Safety mechanisms mentioned in the intro:**
 
-A check bolted onto the output path. That is why it sits in a single direction at the post-instruction tokens, and why flattening one axis out of several thousand removes it. It is a detector, and detectors can be switched off.
+- Inan, H. et al. (2023). *Llama Guard: LLM-based Input-Output Safeguard for Human-AI Conversations.* [arXiv:2312.06674](https://arxiv.org/abs/2312.06674)
+- Sharma, M. et al. (2025). *Constitutional Classifiers: Defending against Universal Jailbreaks across Thousands of Hours of Red Teaming.* [arXiv:2501.18837](https://arxiv.org/abs/2501.18837)
+- Ouyang, L. et al. (2022). *Training language models to follow instructions with human feedback.* [arXiv:2203.02155](https://arxiv.org/abs/2203.02155)
+- Bai, Y. et al. (2022). *Training a Helpful and Harmless Assistant with Reinforcement Learning from Human Feedback.* [arXiv:2204.05862](https://arxiv.org/abs/2204.05862)
+- Bai, Y. et al. (2022). *Constitutional AI: Harmlessness from AI Feedback.* [arXiv:2212.08073](https://arxiv.org/abs/2212.08073)
+- Lee, H. et al. (2023). *RLAIF vs. RLHF: Scaling Reinforcement Learning from Human Feedback with AI Feedback.* [arXiv:2309.00267](https://arxiv.org/abs/2309.00267)
+- Rafailov, R. et al. (2023). *Direct Preference Optimization: Your Language Model is Secretly a Reward Model.* [arXiv:2305.18290](https://arxiv.org/abs/2305.18290)
+- Wallace, E. et al. (2024). *The Instruction Hierarchy: Training LLMs to Prioritize Privileged Instructions.* [arXiv:2404.13208](https://arxiv.org/abs/2404.13208)
+- Casper, S. et al. (2024). *Defending Against Unforeseen Failure Modes with Latent Adversarial Training.* [arXiv:2403.05030](https://arxiv.org/abs/2403.05030)
+- Li, N. et al. (2024). *The WMDP Benchmark: Measuring and Reducing Malicious Use With Unlearning.* [arXiv:2403.03218](https://arxiv.org/abs/2403.03218) — introduces RMU
+- Zou, A. et al. (2024). *Improving Alignment and Robustness with Circuit Breakers.* [arXiv:2406.04313](https://arxiv.org/abs/2406.04313)
+- Guan, M. Y. et al. (2024). *Deliberative Alignment: Reasoning Enables Safer Language Models.* [arXiv:2412.16339](https://arxiv.org/abs/2412.16339)
 
-What you would want instead is something like:
+**Datasets and benchmarks:**
 
-```
-query → understand the situation → understand the consequences → respond accordingly
-```
+- Zou, A. et al. (2023). *Universal and Transferable Adversarial Attacks on Aligned Language Models.* [arXiv:2307.15043](https://arxiv.org/abs/2307.15043) — source of AdvBench
+- Huang, Y. et al. (2023). *Catastrophic Jailbreak of Open-source LLMs via Exploiting Generation.* [arXiv:2310.06987](https://arxiv.org/abs/2310.06987) — source of MaliciousInstruct
+- Mazeika, M. et al. (2024). *HarmBench: A Standardized Evaluation Framework for Automated Red Teaming and Robust Refusal.* [arXiv:2402.04249](https://arxiv.org/abs/2402.04249)
+- Röttger, P. et al. (2023). *XSTest: A Test Suite for Identifying Exaggerated Safety Behaviours in Large Language Models.* [arXiv:2308.01263](https://arxiv.org/abs/2308.01263)
+- Taori, R. et al. (2023). *Stanford Alpaca: An Instruction-following LLaMA model.* [GitHub](https://github.com/tatsu-lab/stanford_alpaca)
+- Zellers, R. et al. (2019). *HellaSwag: Can a Machine Really Finish Your Sentence?* [arXiv:1905.07830](https://arxiv.org/abs/1905.07830)
+- Lin, S. et al. (2021). *TruthfulQA: Measuring How Models Mimic Human Falsehoods.* [arXiv:2109.07958](https://arxiv.org/abs/2109.07958)
 
-Here refusal is a *consequence* of understanding, not a filter applied afterwards. You cannot delete it with a rank-one edit, because it is not a separate thing from the model's grasp of the request.
+**Background on the method:**
 
-The Zhao et al. result makes me think this is not purely wishful. The models do seem to have a harmfulness representation that is distinct from the refusal one, and it is more robust: it survives jailbreaks and adversarial fine-tuning that flip the refusal behaviour. So the ingredient is in there. It is just not what the behaviour is wired to. The direction of travel I would like to see is making that internal judgement upstream of the response, rather than training a better detector to sit on top of it.
-
-That is a much harder research problem than the one I did. But it is the reason I think measuring how easily the current guardrail breaks is worth the effort.
-
----
-
-*No training and no gradients anywhere: this is difference-in-means plus forward hooks. The 14B sweep was the expensive part, about 19,500 generations plus capability and coherence passes at every α. Original method and code: [Arditi et al., 2024](https://arxiv.org/abs/2406.11717), [github.com/andyrdt/refusal_direction](https://github.com/andyrdt/refusal_direction).*
-
+- Park, K. et al. (2023). *The Linear Representation Hypothesis and the Geometry of Large Language Models.* [arXiv:2311.03658](https://arxiv.org/abs/2311.03658)
+- Marks, S. & Tegmark, M. (2023). *The Geometry of Truth: Emergent Linear Structure in Large Language Model Representations of True/False Datasets.* [arXiv:2310.06824](https://arxiv.org/abs/2310.06824)

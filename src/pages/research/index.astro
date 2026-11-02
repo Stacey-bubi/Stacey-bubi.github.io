@@ -4,7 +4,7 @@ import { href } from '../../utils/url'
 
 const title = 'Research'
 const description =
-  'Small studies I have run myself on refusal directions in language models.'
+  'A small study I have run myself on refusal directions in language models.'
 
 const posts = [
   {
@@ -13,15 +13,7 @@ const posts = [
     lede: 'Replicating Arditi et al. on Qwen2.5, then turning the knob down.',
     status: 'finished',
     summary:
-      'The single-direction result reproduces on Qwen2.5-7B and 14B. Adding a scaling knob to the ablation shows two things I did not expect: refusal is gone well before full ablation, and partial ablation damages the model more than full ablation does.'
-  },
-  {
-    slug: 'abliteration-selectivity',
-    title: 'Removing the refusal direction from four models',
-    lede: 'Does removing refusal break maths, or just break the model?',
-    status: 'draft',
-    summary:
-      'A pilot across four model families. The reproduction worked cleanly on one of them, and the geometry turned out more interesting than the behaviour: a pure-noise subspace overlaps refusal as much as a maths subspace does, so the uncorrected overlap numbers mean nothing.'
+      'The single-direction result reproduces on Qwen2.5-7B and 14B. Putting a scaling knob on the ablation shows it is a soft switch, not a dimmer: refusal is gone well before full ablation, and partial ablation damages the model more than full ablation does.'
   }
 ]
 ---
@@ -30,9 +22,8 @@ const posts = [
   <div class="wrap intro">
     <h1>Research</h1>
     <p>
-      Small studies I have run myself, mostly on how fragile refusal is and on
-      whether the geometry people measure means what they think it means. Both use
-      difference-in-means and forward hooks, no training.
+      A small study I have run myself on how fragile refusal is in open chat
+      models. Difference-in-means and forward hooks, no training.
     </p>
   </div>
 

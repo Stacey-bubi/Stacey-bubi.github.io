@@ -9,11 +9,11 @@ const description =
 const posts = [
   {
     slug: 'refusal-ablation',
-    title: 'How hard do you have to push to break refusal?',
-    lede: 'Replicating Arditi et al. on Qwen2.5, then turning the knob down.',
+    title: 'Replicating and Extending the Refusal Direction',
+    lede: 'A Graded Ablation Study on Qwen2.5',
     status: 'finished',
     summary:
-      'The single-direction result reproduces on Qwen2.5-7B and 14B. Putting a scaling knob on the ablation shows it is a soft switch, not a dimmer: refusal is gone well before full ablation, and partial ablation damages the model more than full ablation does.'
+      'Refusal is gone well before the direction is fully removed, and removing more after that changes nothing. Removing only part of it damages the model more than removing all of it.'
   }
 ]
 ---

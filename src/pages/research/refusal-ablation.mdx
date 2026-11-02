@@ -10,15 +10,20 @@ facts:
 ---
 
 It happened historically: first came an architecture that turns text into text, and is useful exactly for that, and only afterwards came the constraints and the mechanisms meant to keep users and everyone else safe.
+
 There are a lot of those machinery. Some sit outside the weights, in the harness: input/output classifiers like [Llama Guard](https://arxiv.org/abs/2312.06674) or [Constitutional Classifiers](https://arxiv.org/abs/2501.18837); system prompts that state the rules at runtime; monitoring, meaning offline log review and chain-of-thought inspection; access controls — account checks, rate limits, bans, trusted-user tiers; agent controls like sandboxing, tool permissions, human approval for risky actions; and weight security, which stops someone stealing the weights and fine-tuning the safeguards off.
+
 Others change the weights. Pretraining data filtering removes dangerous content before the model ever learns it. SFT on safe answers teaches refusals by example. Preference training ([RLHF](https://arxiv.org/abs/2203.02155), [RLAIF](https://arxiv.org/abs/2309.00267), [Constitutional AI](https://arxiv.org/abs/2212.08073), [DPO](https://arxiv.org/abs/2305.18290)) rewards safe and helpful answers over harmful ones. [Instruction hierarchy](https://arxiv.org/abs/2404.13208) teaches the model to rank system prompt above user above tool output. Adversarial training trains on jailbreaks — the [latent variant](https://arxiv.org/abs/2403.05030) (Casper et al., 2024) attacks activations instead of inputs. [Unlearning](https://arxiv.org/abs/2403.03218) (RMU, Li et al., 2024) tries to cut out specific dangerous knowledge. [Circuit breakers](https://arxiv.org/abs/2406.04313) (Zou et al., 2024) train harmful internal states to get redirected so the model can't continue. Abstention training teaches saying "I don't know". [Deliberative alignment](https://arxiv.org/abs/2412.16339) (Guan et al., 2024) trains the model to reason over a written safety spec before it answers.
+
 There are more. But the most visible one is refusal. You ask for something harmful, the model says *"I'm sorry, I can't help with that"*.
 
 
 I spent a long time running evals on models in medical domains, so whether I wanted to or not I kept hitting refusals of every kind. Back then I only worked with behavioural artifacts, not internals, and the mechanism already bothered me. At what stage was it learned, and at what stage should it actually be introduced? How reliable is it? Can you flip the model's decision with interventions in weights or activations — make it refuse safe requests and answer dangerous ones? How far does that generalise across models that differ in size, architecture, corpus, alignment? Are open-weight models in trouble? Some of these got answered in the papers below. Some are naive. Some are philosophical.
 
 The paper that opened the door to interpretability for me, and indirectly to AI safety, is a bit of a double-edged sword: [Refusal in Language Models Is Mediated by a Single Direction, Arditi et al. (2024)](https://arxiv.org/abs/2406.11717).
+
 TLDR: across 13 open models, authors found that refusal is mediated by **one direction** in the residual stream. Erasing that direction caused the AI to stop refusing requests.. Add it and the model refuses to explain yoga — mildly irritating overrefusal. Small price to save the day, I'd say.
+
 But if one direction and a few lines of hook code switch off refusal across a whole model family, then "the model refuses" is not something you can lean on for an open-weight model. That's worth measuring rather than assuming, because it feeds into what gets released and which safety arguments get taken seriously.
 
 ---
@@ -28,6 +33,7 @@ But if one direction and a few lines of hook code switch off refusal across a wh
 Arditi remove the whole direction. That answers *can it be done*, not *how cheaply*.
 
 Look at it from the attacker's side. Full ablation is cheap to run, but it's blunt: you've flattened one axis everywhere in the network and you don't know what else was riding on it. What an attacker actually wants is the smallest edit that kills refusal and leaves the model useful. So — is there a cheap setting? Does the guardrail degrade gracefully and give you a dial, or does it snap? And does pushing harder cost you more of the model's general capabilities?
+
 The experiment: I took the family Arditi didn't test (Qwen2.5-Instruct), put a scaling factor `α` on the ablation, and swept it from 0 to 1.25.
 
 ---
